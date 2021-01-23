@@ -360,16 +360,6 @@ creation process. This process uses ~org-capture~'s templating system, and can
 be customized (see [[*The Templating System][The Templating System]]). Using the default template, pressing
 ~C-c C-c~ finishes the note capture.
 
-By default, Org-roam updates the cache asynchronously in the background to
-avoid getting in the way of writing. Org-roam queues updates to the files,
-waits for you to be idle for 2 seconds, and then automatically triggers
-updating the cache. After the cache has been updated, running ~M-x
-org-roam-find-file~ again should show the note you have created, and selecting
-that entry will bring you to that note [fn:1]. One can customize the waiting
-time by setting ~org-roam-db-update-idle-seconds~; or change the cache update
-to be triggered immediately after buffer save by setting
-~org-roam-db-update-method~ to ~'immediate~.
-
 For experienced ~org-capture~ users, the behavior of ~M-x org-roam-find-file~ 
 may seem unfamiliar: after finishing a capture with ~C-c C-c~, you are returned  
 not to the original buffer from which you called ~M-x org-roam-find-file~, but 
@@ -760,23 +750,6 @@ The ~org-roam-link-current~ face corresponds to links to the same file it is in.
 
 The ~org-roam-link-invalid~ face is applied to links that are broken. These are
 links to files or IDs that cannot be found.
-** TODO The Database
-
-Org-roam is backed by a Sqlite database.
-
-- User Option: org-roam-db-update-method
-
-  Method to update the Org-roam database.
-
-  ~'immediate~: Update the database immediately upon file changes.
-
-  ~'idle-timer~: Updates the database if dirty, if Emacs idles for
-  ~org-roam-db-update-idle-seconds~.
-
-- User Option: org-roam-db-update-idle-seconds
-
-  Number of idle seconds before triggering an Org-roam database update. This is
-  only valid if ~org-roam-db-update-method~ is ~'idle-timer~.
 
 * Inserting Links
 

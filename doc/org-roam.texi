@@ -128,7 +128,6 @@ Concepts and Configuration
 * The Org-roam Buffer::
 * Org-roam Files::
 * Org-roam Faces::
-* The Database::
 
 Completions
 
@@ -587,17 +586,6 @@ creation process. This process uses @code{org-capture}'s templating system, and 
 be customized (see @ref{The Templating System}). Using the default template, pressing
 @code{C-c C-c} finishes the note capture.
 
-By default, Org-roam updates the cache asynchronously in the background to
-avoid getting in the way of writing. Org-roam queues updates to the files,
-waits for you to be idle for 2 seconds, and then automatically triggers
-updating the cache. After the cache has been updated, running @code{M-x
-org-roam-find-file} again should show the note you have created, and selecting
-that entry will bring you to that note @footnote{Depending on your completion framework, you may need to press TAB to
-see the list.}. One can customize the waiting
-time by setting @code{org-roam-db-update-idle-seconds}; or change the cache update
-to be triggered immediately after buffer save by setting
-@code{org-roam-db-update-method} to @code{'immediate}.
-
 For experienced @code{org-capture} users, the behavior of @code{M-x org-roam-find-file} 
 may seem unfamiliar: after finishing a capture with @code{C-c C-c}, you are returned  
 not to the original buffer from which you called @code{M-x org-roam-find-file}, but 
@@ -993,7 +981,6 @@ org-roam}.
 * The Org-roam Buffer::
 * Org-roam Files::
 * Org-roam Faces::
-* The Database::
 @end menu
 
 @node Directories and Files
@@ -1085,27 +1072,6 @@ The @code{org-roam-link-current} face corresponds to links to the same file it i
 
 The @code{org-roam-link-invalid} face is applied to links that are broken. These are
 links to files or IDs that cannot be found.
-
-@node The Database
-@section @strong{TODO} The Database
-
-Org-roam is backed by a Sqlite database.
-
-@defopt org-roam-db-update-method
-
-Method to update the Org-roam database.
-
-@code{'immediate}: Update the database immediately upon file changes.
-
-@code{'idle-timer}: Updates the database if dirty, if Emacs idles for
-@code{org-roam-db-update-idle-seconds}.
-@end defopt
-
-@defopt org-roam-db-update-idle-seconds
-
-Number of idle seconds before triggering an Org-roam database update. This is
-only valid if @code{org-roam-db-update-method} is @code{'idle-timer}.
-@end defopt
 
 @node Inserting Links
 @chapter Inserting Links

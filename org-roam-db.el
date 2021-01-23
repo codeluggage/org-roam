@@ -84,32 +84,10 @@ value like `most-positive-fixnum'."
   :type 'int
   :group 'org-roam)
 
-(defconst org-roam-db--version 10)
+(defconst org-roam-db--version 11)
 
 (defvar org-roam-db--connection (make-hash-table :test #'equal)
   "Database connection to Org-roam database.")
-
-(defvar org-roam-db-dirty nil
-  "Whether the org-roam database is dirty and requires an update.
-Contains pairs of `org-roam-directory' and `org-roam-db-location'
-so that multi-directories are updated.")
-
-(defcustom org-roam-db-update-method 'idle-timer
-  "Method to update the Org-roam database.
-
-`immediate'
-  Update the database immediately upon file changes.
-
-`idle-timer'
-  Updates the database if dirty, if Emacs idles for `org-roam-db-update-idle-seconds'."
-  :type '(choice (const :tag "idle-timer" idle-timer)
-		 (const :tag "immediate" immediate))
-  :group 'org-roam)
-
-(defcustom org-roam-db-update-idle-seconds 2
-  "Number of idle seconds before triggering an Org-roam database update."
-  :type 'integer
-  :group 'org-roam)
 
 ;;;; Core Functions
 
@@ -160,7 +138,17 @@ SQL can be either the emacsql vector representation, or a string."
   '((files
      [(file :unique :primary-key)
       (hash :not-null)
-      (meta :not-null)])
+      atime
+      mtime])
+
+    (nodes
+     [(id :unique :primary-key :not-null)
+      (file :not-null)
+      (level :not-null)
+      (pos :not-null)
+      (tags :not-null)
+      title
+      ref])
 
     (ids
      [(id :unique :primary-key)
@@ -171,20 +159,7 @@ SQL can be either the emacsql vector representation, or a string."
      [(source :not-null)
       (dest :not-null)
       (type :not-null)
-      (properties :not-null)])
-
-    (tags
-     [(file :unique :primary-key)
-      (tags)])
-
-    (titles
-     [(file :not-null)
-      title])
-
-    (refs
-     [(ref :unique :not-null)
-      (file :not-null)
-      (type :not-null)])))
+      (properties :not-null)])))
 
 (defun org-roam-db--init (db)
   "Initialize database DB with the correct schema and user version."
@@ -218,22 +193,6 @@ the current `org-roam-directory'."
   (dolist (conn (hash-table-values org-roam-db--connection))
     (org-roam-db--close conn)))
 
-;;;; Timer-based updating
-(defvar org-roam-db-file-update-timer nil
-  "Timer for updating the database when dirty.")
-
-(defun org-roam-db-mark-dirty ()
-  "Mark the Org-roam database as dirty."
-  (add-to-list 'org-roam-db-dirty (list org-roam-directory org-roam-db-location)
-               nil #'equal))
-
-(defun org-roam-db-update-cache-on-timer ()
-  "Update the cache if the database is dirty.
-This function is called on `org-roam-db-file-update-timer'."
-  (pcase-dolist (`(,org-roam-directory ,org-roam-db-location) org-roam-db-dirty)
-    (org-roam-db-build-cache))
-  (setq org-roam-db-dirty nil))
-
 ;;;; Database API
 ;;;;; Initialization
 (defun org-roam-db--initialized-p ()
@@ -241,11 +200,6 @@ This function is called on `org-roam-db-file-update-timer'."
   (and (file-exists-p org-roam-db-location)
        (> (caar (org-roam-db-query [:select (funcall count) :from titles]))
           0)))
-
-(defun org-roam-db--ensure-built ()
-  "Ensures that Org-roam cache is built."
-  (unless (org-roam-db--initialized-p)
-    (error "[Org-roam] your cache isn't built yet! Please run org-roam-db-build-cache")))
 
 ;;;;; Clearing
 (defun org-roam-db-clear ()
@@ -555,12 +509,14 @@ If FORCE, force a rebuild of the cache from scratch."
   (caar (org-roam-db-query [:select hash :from files
                               :where (= file $s1)] file-path)))
 
-(defun org-roam-db-update-file (file-path)
+(defun org-roam-db-update-file (&optional file-path)
   "Update Org-roam cache for FILE-PATH.
 If the file does not exist anymore, remove it from the cache.
 If the file exists, update the cache with information."
   (let ((content-hash (org-roam-db--file-hash file-path))
-        (db-hash  (org-roam-db--get-file-hash-from-db file-path)))
+        (file-path (or file-path
+                       (buffer-file-name (buffer-base-buffer))))
+        (db-hash (org-roam-db--get-file-hash-from-db file-path)))
     (unless (string= content-hash db-hash)
       (org-roam-db--update-files (list (cons file-path content-hash)))
       (org-roam-message "Updated: %s" file-path))))
@@ -617,16 +573,6 @@ FILES is a list of (file . hash) pairs."
          (lwarn '(org-roam) :warning
                 "Skipping unreadable file while building cache: %s" file))))
     (list :error-count error-count :modified-count modified-count :id-count id-count :title-count title-count :tag-count tag-count :link-count link-count :ref-count ref-count)))
-
-(defun org-roam-db-update ()
-  "Update the database."
-  (pcase org-roam-db-update-method
-    ('immediate
-     (org-roam-db-update-file (buffer-file-name (buffer-base-buffer))))
-    ('idle-timer
-     (org-roam-db-mark-dirty))
-    (_
-     (user-error "Invalid `org-roam-db-update-method'"))))
 
 (provide 'org-roam-db)
 

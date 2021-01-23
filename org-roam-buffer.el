@@ -48,7 +48,6 @@
 (defvar org-roam-mode)
 (defvar org-roam--org-link-bracket-typed-re)
 
-(declare-function org-roam-db--ensure-built   "org-roam-db")
 (declare-function org-roam-db--get-title      "org-roam-db")
 (declare-function org-roam-db-has-file-p      "org-roam-db")
 (declare-function org-roam--extract-refs      "org-roam")
@@ -240,7 +239,6 @@ ORIG-PATH is the path where the CONTENT originated."
 (defun org-roam-buffer-update ()
   "Update the `org-roam-buffer'."
   (interactive)
-  (org-roam-db--ensure-built)
   (let* ((source-org-roam-directory org-roam-directory))
     (with-current-buffer org-roam-buffer
       ;; When dir-locals.el is used to override org-roam-directory,

@@ -1387,7 +1387,7 @@ To be added to `org-roam-title-change-hook'."
           (unless (string-equal file-name new-file-name)
             (rename-file file-name new-file-name)
             (set-visited-file-name new-file-name t t)
-            (org-roam-db-update)
+            (org-roam-db-update-file)
             (org-roam-message "File moved to %S" (abbreviate-file-name new-file-name))))))))
 
 (defun org-roam--rename-file-advice (old-file new-file-or-dir &rest _args)
@@ -1404,7 +1404,6 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
                (not (backup-file-name-p old-file))
                (not (backup-file-name-p new-file))
                (org-roam--org-roam-file-p old-file))
-      (org-roam-db--ensure-built)
       (setq files-affected (org-roam-db-query [:select :distinct [source]
                                                :from links
                                                :where (= dest $s1)]
@@ -1434,9 +1433,8 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
   "Update the database if a new Org ID is created."
   (when (and org-roam-enable-headline-linking
              (org-roam--org-roam-file-p)
-             (not (eq org-roam-db-update-method 'immediate))
              (not (org-roam-capture-p)))
-    (org-roam-db-update)))
+    (org-roam-db-update-file)))
 
 ;;;###autoload
 (define-minor-mode org-roam-mode
@@ -1471,9 +1469,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (add-hook 'find-file-hook #'org-roam--find-file-hook-function)
     (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
     (add-hook 'org-open-at-point-functions #'org-roam-open-id-at-point)
-    (when (and (not org-roam-db-file-update-timer)
-               (eq org-roam-db-update-method 'idle-timer))
-        (setq org-roam-db-file-update-timer (run-with-idle-timer org-roam-db-update-idle-seconds t #'org-roam-db-update-cache-on-timer)))
     (advice-add 'rename-file :after #'org-roam--rename-file-advice)
     (advice-add 'delete-file :before #'org-roam--delete-file-advice)
     (advice-add 'org-id-new :after #'org-roam--id-new-advice)
@@ -1491,8 +1486,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
     (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
     (remove-hook 'org-open-at-point-functions #'org-roam-open-id-at-point)
-    (when org-roam-db-file-update-timer
-      (cancel-timer org-roam-db-file-update-timer))
     (advice-remove 'rename-file #'org-roam--rename-file-advice)
     (advice-remove 'delete-file #'org-roam--delete-file-advice)
     (advice-remove 'org-id-new #'org-roam--id-new-advice)
