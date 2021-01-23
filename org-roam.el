@@ -850,20 +850,12 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
   "Return an alist for completion.
 The car is the displayed title for completion, and the cdr is a
 plist containing the path and title for the file."
-  (let* ((rows (org-roam-db-query [:select [files:file titles:title tags:tags files:meta] :from titles
-                                   :left :join tags
-                                   :on (= titles:file tags:file)
-                                   :left :join files
-                                   :on (= titles:file files:file)]))
+  (let* ((rows (org-roam-db-query [:select [file title tags pos] :from nodes]))
          completions)
-    (setq rows (seq-sort-by (lambda (x)
-                              (plist-get (nth 3 x) :mtime))
-                            #'time-less-p
-                            rows))
     (dolist (row rows completions)
-      (pcase-let ((`(,file-path ,title ,tags) row))
+      (pcase-let ((`(,file-path ,title ,tags ,pos) row))
         (let ((k (org-roam--add-tag-string title tags))
-              (v (list :path file-path :title title)))
+              (v (list :path file-path :title title :point pos)))
           (push (cons k v) completions))))))
 
 (defun org-roam--get-index-path ()
@@ -1272,7 +1264,7 @@ file."
   "Advice for maintaining cache consistency when FILE is deleted."
   (when (and (not (auto-save-file-name-p file))
              (org-roam--org-roam-file-p file))
-    (org-roam-db--clear-file (expand-file-name file))))
+    (org-roam-db-clear-file (expand-file-name file))))
 
 (defun org-roam--get-link-replacement (old-path new-path &optional old-desc new-desc)
   "Create replacement text for link at point if OLD-PATH is a match.
@@ -1409,7 +1401,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
                                                :where (= dest $s1)]
                                               old-file))
       ;; Remove database entries for old-file.org
-      (org-roam-db--clear-file old-file)
+      (org-roam-db-clear-file old-file)
       ;; If the new path is in a different directory, relative links
       ;; will break. Fix all file-relative links:
       (unless (string= (file-name-directory old-file)
@@ -1417,7 +1409,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
         (org-roam-with-file new-file nil
           (org-roam--fix-relative-links old-file)))
       (when (org-roam--org-roam-file-p new-file)
-        (org-roam-db--update-file new-file))
+        (org-roam-db-update-file new-file))
       ;; Replace links from old-file.org -> new-file.org in all Org-roam files with these links
       (mapc (lambda (file)
               (setq file (if (string-equal (car file) old-file)
@@ -1426,7 +1418,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
               (org-roam-with-file file nil
                 (org-roam--replace-link old-file new-file)
                 (save-buffer)
-                (org-roam-db--update-file)))
+                (org-roam-db-update-file)))
             files-affected))))
 
 (defun org-roam--id-new-advice (&rest _args)
@@ -1521,8 +1513,8 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (insert (format "- Org-roam: %s" (org-roam-version)))))
 
 ;;;###autoload
-(defun org-roam-find-file (&optional initial-prompt completions filter-fn no-confirm)
-  "Find and open an Org-roam file.
+(defun org-roam-find-file (&optional initial-prompt no-confirm)
+  "Find and open an Org-roam node.
 INITIAL-PROMPT is the initial title prompt.
 COMPLETIONS is a list of completions to be used instead of
 `org-roam--get-title-path-completions`.
@@ -1532,8 +1524,7 @@ which takes as its argument an alist of path-completions.  See
 If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
   (interactive)
   (unless org-roam-mode (org-roam-mode))
-  (let* ((completions (funcall (or filter-fn #'identity)
-                               (or completions (org-roam--get-title-path-completions))))
+  (let* ((completions (org-roam--get-title-path-completions))
          (title-with-tags (if no-confirm
                               initial-prompt
                             (org-roam-completion--completing-read "File: " completions
@@ -1541,7 +1532,9 @@ If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
          (res (cdr (assoc title-with-tags completions)))
          (file-path (plist-get res :path)))
     (if file-path
-        (org-roam--find-file file-path)
+        (progn
+          (find-file file-path)
+          (goto-char (plist-get res :point)))
       (let ((org-roam-capture--info `((title . ,title-with-tags)
                                       (slug  . ,(funcall org-roam-title-to-slug-function title-with-tags))))
             (org-roam-capture--context 'title))
