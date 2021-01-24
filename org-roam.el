@@ -575,54 +575,8 @@ FILE-FROM is typically the buffer file path, but this may not exist, for example
 in temp buffers.  In cases where this occurs, we do know the file path, and pass
 it as FILE-PATH."
   (require 'org-ref nil t)
-  (setq file-path (or file-path
-                      org-roam-file-name
-                      (buffer-file-name)))
-  (save-excursion
-    (let (links)
-      (org-element-map (org-element-parse-buffer) 'link
-        (lambda (link)
-          (goto-char (org-element-property :begin link))
-          (let* ((type (org-roam--collate-types (org-element-property :type link)))
-                 (path (org-element-property :path link))
-                 (properties (list :outline (org-roam--get-outline-path)
-                                   :point (point)))
-                 (names (pcase type
-                          ("id"
-                           (when-let ((file-path (org-roam-id-get-file path)))
-                             (list file-path)))
-                          ("cite" (list path))
-                          ("website" (list path))
-                          ("fuzzy" (list path))
-                          ("roam" (list path))
-                          (_ (if (or (file-remote-p path)
-                                     (org-roam--url-p path))
-                                 (list path)
-                               (let ((file-maybe (expand-file-name path (file-name-directory file-path))))
-                                 (if (f-exists? file-maybe)
-                                     (list file-maybe)
-                                   (list path))))))))
-            (dolist (name names)
-              (when name
-                (push (vector file-path name type properties) links))))))
-      links)))
-
-(defun org-roam--extract-ids (&optional file-path)
-  "Extract all IDs within the current buffer.
-If FILE-PATH is nil, use the current file."
   (setq file-path (or file-path org-roam-file-name (buffer-file-name)))
-  (let (result)
-      ;; We need to handle the special case of the file property drawer (at outline level 0)
-      (org-with-point-at (point-min)
-        (when-let ((before-first-heading (= 0 (org-outline-level)))
-                   (id (org-entry-get nil "ID")))
-           (push (vector id file-path 0) result)))
-      (org-map-region
-       (lambda ()
-         (when-let ((id (org-entry-get nil "ID")))
-           (push (vector id file-path (org-outline-level)) result)))
-       (point-min) (point-max))
-      result))
+  )
 
 (defun org-roam--extract-titles-title ()
   "Return title from \"#+title\" of the current buffer."
@@ -1533,12 +1487,8 @@ Return added alias."
   (let ((alias (read-string "Alias: " )))
     (when (string-empty-p alias)
       (user-error "Alias can't be empty"))
-    (org-roam--set-global-prop
-     "roam_alias"
-     (combine-and-quote-strings
-      (seq-uniq (cons alias
-                      (org-roam--extract-titles-alias)))))
-    (org-roam-db--update-file (buffer-file-name (buffer-base-buffer)))
+    ;; TODO implement
+    (org-roam-db-update-file)
     alias))
 
 ;;;###autoload
@@ -1548,10 +1498,8 @@ Return added alias."
   (unless org-roam-mode (org-roam-mode))
   (if-let ((aliases (org-roam--extract-titles-alias)))
       (let ((alias (completing-read "Alias: " aliases nil 'require-match)))
-        (org-roam--set-global-prop
-         "roam_alias"
-         (combine-and-quote-strings (delete alias aliases)))
-        (org-roam-db--update-file (buffer-file-name (buffer-base-buffer))))
+        ;; TODO implement
+        (org-roam-db-update-file))
     (user-error "No aliases to delete")))
 
 (defun org-roam-tag-add ()
@@ -1560,30 +1508,15 @@ Return added alias."
 Return added tag."
   (interactive)
   (unless org-roam-mode (org-roam-mode))
-  (let* ((all-tags (org-roam-db--get-tags))
-         (tag (completing-read "Tag: " all-tags))
-         (file (buffer-file-name (buffer-base-buffer)))
-         (existing-tags (org-roam--extract-tags-prop file)))
-    (when (string-empty-p tag)
-      (user-error "Tag can't be empty"))
-    (org-roam--set-global-prop
-     "roam_tags"
-     (combine-and-quote-strings (seq-uniq (cons tag existing-tags))))
-    (org-roam-db--insert-tags 'update)
-    tag))
+  ;; TODO implement this
+  )
 
 (defun org-roam-tag-delete ()
   "Delete a tag from Org-roam file."
   (interactive)
   (unless org-roam-mode (org-roam-mode))
-  (if-let* ((file (buffer-file-name (buffer-base-buffer)))
-            (tags (org-roam--extract-tags-prop file)))
-      (let ((tag (completing-read "Tag: " tags nil 'require-match)))
-        (org-roam--set-global-prop
-         "roam_tags"
-         (combine-and-quote-strings (delete tag tags)))
-        (org-roam-db--insert-tags 'update))
-    (user-error "No tag to delete")))
+  ;; TODO implement this
+  )
 
 ;;;###autoload
 (defun org-roam-switch-to-buffer ()
