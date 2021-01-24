@@ -84,7 +84,7 @@ value like `most-positive-fixnum'."
   :type 'int
   :group 'org-roam)
 
-(defconst org-roam-db--version 11)
+(defconst org-roam-db--version 12)
 
 (defvar org-roam-db--connection (make-hash-table :test #'equal)
   "Database connection to Org-roam database.")
@@ -142,7 +142,7 @@ SQL can be either the emacsql vector representation, or a string."
       mtime])
 
     (nodes
-     [(id :unique :primary-key :not-null)
+     [(id :primary-key :not-null)
       (file :not-null)
       (level :not-null)
       (pos :not-null)
@@ -253,7 +253,19 @@ If UPDATE-P is non-nil, first remove the file in the database."
               level (org-outline-level)
               ;; TODO handle ref
               ref nil)
-        (push (vector id file level pos tags title ref) nodes)))
+        (push (vector id file level pos tags title ref) nodes))
+      ;; Then we loop over all headlines
+      (org-map-entries
+       (lambda ()
+         (when (setq id (org-id-get))
+           (setq title (nth 4 (org-heading-components))
+              ;; TODO handle tags
+              tags nil
+              pos (point)
+              level (org-outline-level)
+              ;; TODO handle ref
+              ref nil)
+           (push (vector id file level pos tags title ref) nodes)))))
     (when nodes
       (org-roam-db-query
        [:insert :into nodes

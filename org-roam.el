@@ -971,12 +971,7 @@ Return nil if the file does not exist."
   :keymap  (let ((map (make-sparse-keymap)))
              (define-key map [mouse-1] 'org-open-at-point)
              (define-key map (kbd "RET") 'org-open-at-point)
-             map)
-  (if org-roam-backlinks-mode
-      (add-hook 'org-open-at-point-functions
-                #'org-roam-open-at-point nil 'local)
-    (remove-hook 'org-open-at-point-functions
-                 #'org-roam-open-at-point 'local)))
+             map))
 
 (defun org-roam--in-buffer-p ()
   "Return t if in the Org-roam buffer."
@@ -996,31 +991,6 @@ Return nil if the file does not exist."
                                (_ dest))))))
       (string= current-file backlink-dest))))
 
-(defun org-roam-open-at-point ()
-  "Open an Org-roam link or visit the text previewed at point.
-When point is on an Org-roam link, open the link in the Org-roam window.
-When point is on the Org-roam preview text, open the link in the Org-roam
-window, and navigate to the point.
-This function hooks into `org-open-at-point' via `org-open-at-point-functions'."
-  (cond
-   ;; Org-roam link
-   ((let* ((context (org-element-context))
-           (path (org-element-property :path context)))
-      (when (and (eq (org-element-type context) 'link)
-                 (org-roam--org-roam-file-p path))
-        (org-roam-buffer--find-file path)
-        (org-show-context)
-        t)))
-   ;; Org-roam preview text
-   ((when-let ((file-from (get-text-property (point) 'file-from))
-               (p (get-text-property (point) 'file-from-point)))
-      (org-roam-buffer--find-file file-from)
-      (goto-char p)
-      (org-show-context)
-      t))
-   ;; If called via `org-open-at-point', fall back to default behavior.
-   (t nil)))
-
 (defun org-roam--get-backlinks (targets)
   "Return the backlinks for TARGETS.
 TARGETS is a list of strings corresponding to the TO value in the
@@ -1034,72 +1004,6 @@ citation key, for Org-ref cite links."
     (org-roam-db-query `[:select [source dest properties] :from links
                          :where ,@conditions
                          :order-by (asc source)])))
-
-(defun org-roam-id-get-file (id &optional strict)
-  "Return the file if ID exists.
-When STRICT is non-nil, only consider Org-roam's database.
-Return nil otherwise."
-  (or (caar (org-roam-db-query [:select [file]
-                                :from ids
-                                :where (= id $s1)
-                                :limit 1]
-                               id))
-      (and (not strict)
-           (progn
-             (unless org-id-locations (org-id-locations-load))
-             (or (and org-id-locations
-                      (hash-table-p org-id-locations)
-                      (gethash id org-id-locations)))))))
-
-(defun org-roam-id-find (id &optional markerp strict keep-buffer-p)
-  "Return the location of the entry with the id ID.
-When MARKERP is non-nil, return a marker pointing to the headline.
-Otherwise, return a cons formatted as \(file . pos).
-When STRICT is non-nil, only consider Org-roam’s database.
-When KEEP-BUFFER-P is non-nil, keep the buffers navigated by Org-roam open."
-  (let ((file (org-roam-id-get-file id strict)))
-    (when file
-      (org-roam-with-file file keep-buffer-p
-        (org-id-find-id-in-file id file markerp)))))
-
-(defun org-roam-id-open (id-or-marker &optional strict)
-  "Go to the entry with ID-OR-MARKER.
-Wrapper for `org-id-open' which tries to find the ID in the
-Org-roam's database.
-ID-OR-MARKER can either be the ID of the entry or the marker
-pointing to it if it has already been computed by
-`org-roam-id-find'. If the ID-OR-MARKER is not found, it reverts
-to the default behaviour of `org-id-open'.
-When STRICT is non-nil, only consider Org-roam’s database."
-  (when-let ((marker (if (markerp id-or-marker)
-                         id-or-marker
-                       (org-roam-id-find id-or-marker t strict t))))
-    (org-mark-ring-push)
-    (org-goto-marker-or-bmk marker)
-    (set-marker marker nil)))
-
-(defun org-roam-open-id-at-point ()
-  "Open link, timestamp, footnote or tags at point.
-The function tries to open ID-links with Org-roam’s database
-before falling back to the default behaviour of
-`org-open-at-point'. It also asks the user whether to parse
-`org-id-files' when an ID is not found because it might be a slow
-process.
-This function hooks into `org-open-at-point' via
-`org-open-at-point-functions'."
-  (let* ((context (org-element-context))
-         (type (org-element-property :type context))
-         (id (org-element-property :path context)))
-    (when (string= type "id")
-      (cond ((org-roam-id-open id)
-             t)
-            ;; Ask whether to parse `org-id-files'
-            ((not (y-or-n-p (concat "ID was not found in `org-roam-directory' nor in `org-id-locations'.\n"
-                                    "Search in `org-id-files'? ")))
-             t)
-            ;; Conditionally fall back to default behaviour
-            (t
-             nil)))))
 
 ;;; Completion at point
 (defcustom org-roam-completion-everywhere nil
@@ -1194,53 +1098,6 @@ Otherwise, do not apply custom faces to Org-roam links."
           (const :tag "Do not apply custom faces" nil))
   :group 'org-roam)
 
-(defun org-roam--file-link-face (path)
-  "Conditional face for file: links.
-Applies `org-roam-link-current' if PATH corresponds to the
-currently opened Org-roam file in the backlink buffer, or
-`org-roam-link-face' if PATH corresponds to any other Org-roam
-file."
-  (save-match-data
-    (let* ((in-note (-> (buffer-file-name (buffer-base-buffer))
-                        (org-roam--org-roam-file-p)))
-           (custom (or (and in-note org-roam-link-use-custom-faces)
-                       (eq org-roam-link-use-custom-faces 'everywhere))))
-      (cond ((and custom
-                  (not (file-remote-p path)) ;; Prevent lockups opening Tramp links
-                  (not (file-exists-p path)))
-             'org-roam-link-invalid)
-            ((and (org-roam--in-buffer-p)
-                  (org-roam--backlink-to-current-p))
-             'org-roam-link-current)
-            ((and custom
-                  (org-roam--org-roam-file-p path))
-             'org-roam-link)
-            (t
-             'org-link)))))
-
-(defun org-roam--id-link-face (id)
-  "Conditional face for id links.
-Applies `org-roam-link-current' if ID corresponds to the
-currently opened Org-roam file in the backlink buffer, or
-`org-roam-link-face' if ID corresponds to any other Org-roam
-file."
-  (save-match-data
-    (let* ((in-note (-> (buffer-file-name (buffer-base-buffer))
-                        (org-roam--org-roam-file-p)))
-           (custom (or (and in-note org-roam-link-use-custom-faces)
-                       (eq org-roam-link-use-custom-faces 'everywhere))))
-      (cond ((and (org-roam--in-buffer-p)
-                  (org-roam--backlink-to-current-p))
-             'org-roam-link-current)
-            ((and custom
-                  (org-roam-id-get-file id t))
-             'org-roam-link)
-            ((and custom
-                  (not (org-roam-id-get-file id)))
-             'org-roam-link-invalid)
-            (t
-             'org-link)))))
-
 ;;;; Hooks and Advices
 (defcustom org-roam-file-setup-hook nil
   "Hook that is run on setting up an Org-roam file."
@@ -1255,7 +1112,7 @@ file."
     (org-roam--setup-title-auto-update)
     (add-hook 'post-command-hook #'org-roam-buffer--update-maybe nil t)
     (add-hook 'before-save-hook #'org-roam-link--replace-link-on-save nil t)
-    (add-hook 'after-save-hook #'org-roam-db-update nil t)
+    (add-hook 'after-save-hook #'org-roam-db-update-file nil t)
     (dolist (fn org-roam-completion-functions)
       (add-hook 'completion-at-point-functions fn nil t))
     (org-roam-buffer--update-maybe :redisplay t)))
@@ -1460,37 +1317,29 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (add-to-list 'org-execute-file-search-functions 'org-roam--execute-file-row-col)
     (add-hook 'find-file-hook #'org-roam--find-file-hook-function)
     (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-    (add-hook 'org-open-at-point-functions #'org-roam-open-id-at-point)
     (advice-add 'rename-file :after #'org-roam--rename-file-advice)
     (advice-add 'delete-file :before #'org-roam--delete-file-advice)
     (advice-add 'org-id-new :after #'org-roam--id-new-advice)
-    (when (fboundp 'org-link-set-parameters)
-      (org-link-set-parameters "file" :face 'org-roam--file-link-face)
-      (org-link-set-parameters "id" :face 'org-roam--id-link-face))
     (dolist (buf (org-roam--get-roam-buffers))
       (with-current-buffer buf
         (add-hook 'post-command-hook #'org-roam-buffer--update-maybe nil t)
         (add-hook 'before-save-hook #'org-roam-link--replace-link-on-save nil t)
-        (add-hook 'after-save-hook #'org-roam-db-update nil t)))
+        (add-hook 'after-save-hook #'org-roam-db-update-file nil t)))
     (org-roam-db-build-cache))
    (t
     (setq org-execute-file-search-functions (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
     (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
     (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
-    (remove-hook 'org-open-at-point-functions #'org-roam-open-id-at-point)
     (advice-remove 'rename-file #'org-roam--rename-file-advice)
     (advice-remove 'delete-file #'org-roam--delete-file-advice)
     (advice-remove 'org-id-new #'org-roam--id-new-advice)
-    (when (fboundp 'org-link-set-parameters)
-      (dolist (face '("file" "id"))
-        (org-link-set-parameters face :face 'org-link)))
     (org-roam-db--close-all)
     ;; Disable local hooks for all org-roam buffers
     (dolist (buf (org-roam--get-roam-buffers))
       (with-current-buffer buf
         (remove-hook 'post-command-hook #'org-roam-buffer--update-maybe t)
         (remove-hook 'before-save-hook #'org-roam-link--replace-link-on-save t)
-        (remove-hook 'after-save-hook #'org-roam-db-update t))))))
+        (remove-hook 'after-save-hook #'org-roam-db-update-file t))))))
 
 ;;; Interactive Commands
 ;;;###autoload
