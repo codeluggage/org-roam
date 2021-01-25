@@ -275,11 +275,6 @@ The currently supported symbols are:
                  (const :tag "Omit" omit))
   :group 'org-roam)
 
-(defcustom org-roam-enable-headline-linking t
-  "Enable linking to headlines, which includes automatic :ID: creation and scanning of :ID:s for org-roam database."
-  :type 'boolean
-  :group 'org-roam)
-
 (defcustom org-roam-verbose t
   "Echo messages that are not errors."
   :type 'boolean
@@ -1218,8 +1213,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
 
 (defun org-roam--id-new-advice (&rest _args)
   "Update the database if a new Org ID is created."
-  (when (and org-roam-enable-headline-linking
-             (org-roam--org-roam-file-p)
+  (when (and (org-roam--org-roam-file-p)
              (not (org-roam-capture-p)))
     (org-roam-db-update-file)))
 
