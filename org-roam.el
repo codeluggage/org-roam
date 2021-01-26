@@ -365,10 +365,10 @@ If FILE is not specified, use the current buffer's file-path."
 (defun org-roam--shell-command-files (cmd)
   "Run CMD in the shell and return a list of files. If no files are found, an empty list is returned."
   (--> cmd
-       (shell-command-to-string it)
-       (ansi-color-filter-apply it)
-       (split-string it "\n")
-       (seq-filter #'s-present? it)))
+    (shell-command-to-string it)
+    (ansi-color-filter-apply it)
+    (split-string it "\n")
+    (seq-filter #'s-present? it)))
 
 (defun org-roam--list-files-search-globs (exts)
   "Given EXTS, return a list of search globs.
@@ -387,8 +387,8 @@ E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
 (defun org-roam--list-files-find (executable dir)
   "Return all Org-roam files located recursively within DIR, using find, provided as EXECUTABLE."
   (let* ((globs (org-roam--list-files-search-globs org-roam-file-extensions))
-         (command (s-join " " `(,executable "-L" ,dir "-type f \\("
-                                            ,(s-join " -o " (mapcar (lambda (glob) (concat "-name " glob)) globs)) "\\)"))))
+         (names (s-join " -o " (mapcar (lambda (glob) (concat "-name " glob)) globs)))
+         (command (s-join " " `(,executable "-L" ,dir "-type f \\(" ,names "\\)"))))
     (org-roam--shell-command-files command)))
 
 ;; Emacs 26 does not have FOLLOW-SYMLINKS in `directory-files-recursively'
@@ -499,25 +499,10 @@ Use external shell commands if defined in `org-roam-list-files-commands'."
         (when-let ((v (org-entry-get (point) prop)))
           (push (cons prop v) ret))))))
 
-(defun org-roam--collect-keywords (keywords)
-  "Collect all Org KEYWORDS in the current buffer."
-  (if (functionp 'org-collect-keywords)
-      (org-collect-keywords keywords)
-    (let ((buf (org-element-parse-buffer))
-          res)
-      (dolist (k keywords)
-        (let ((p (org-element-map buf 'keyword
-                   (lambda (kw)
-                     (when (string-equal (org-element-property :key kw) k)
-                       (org-element-property :value kw)))
-                   :first-match nil)))
-          (push (cons k p) res)))
-      res)))
-
 (defun org-roam--extract-global-props-keyword (keywords)
   "Extract KEYWORDS from the current Org buffer."
   (let (ret)
-    (pcase-dolist (`(,key . ,values) (org-roam--collect-keywords keywords))
+    (pcase-dolist (`(,key . ,values) (org-collect-keywords keywords))
       (dolist (value values)
         (push (cons key value) ret)))
     ret))
@@ -567,20 +552,6 @@ Assume buffer is widened and point is on a headline."
       (if (org-up-heading-safe)
           (cons heading (org-roam--get-outline-path-1))
         (list heading)))))
-
-(defun org-roam--extract-links (&optional file-path)
-  "Extracts all link items within the current buffer.
-Link items are of the form:
-
-    [source dest type properties]
-
-This is the format that emacsql expects when inserting into the database.
-FILE-FROM is typically the buffer file path, but this may not exist, for example
-in temp buffers.  In cases where this occurs, we do know the file path, and pass
-it as FILE-PATH."
-  (require 'org-ref nil t)
-  (setq file-path (or file-path org-roam-file-name (buffer-file-name)))
-  )
 
 (defun org-roam--extract-titles-title ()
   "Return title from \"#+title\" of the current buffer."
@@ -730,12 +701,12 @@ Each ref is returned as a cons of its type and its key."
         (`(,_ . ,roam-key)
          (org-roam--extract-global-props '("ROAM_KEY")))
       (pcase roam-key
-          ('nil nil)
-          ((pred string-empty-p)
-           (user-error "Org property #+roam_key cannot be empty"))
-          (ref
-           (when-let ((r (org-roam--split-ref ref)))
-             (push r refs)))))
+        ('nil nil)
+        ((pred string-empty-p)
+         (user-error "Org property #+roam_key cannot be empty"))
+        (ref
+         (when-let ((r (org-roam--split-ref ref)))
+           (push r refs)))))
     refs))
 
 (defun org-roam--extract-ref ()
@@ -932,8 +903,8 @@ Return nil if the file does not exist."
   (unless (listp targets)
     (setq targets (list targets)))
   (let ((conditions (--> targets
-                         (mapcar (lambda (i) (list '= 'dest i)) it)
-                         (org-roam--list-interleave it :or))))
+                      (mapcar (lambda (i) (list '= 'dest i)) it)
+                      (org-roam--list-interleave it :or))))
     (org-roam-db-query `[:select [source dest properties] :from links
                          :where ,@conditions
                          :order-by (asc source)])))
@@ -1378,9 +1349,9 @@ If DESCRIPTION is provided, use this as the link label.  See
                     (setq region-text (org-link-display-format (buffer-substring-no-properties beg end)))))
                (completions (--> (or completions
                                      (org-roam--get-title-path-completions))
-                                 (if filter-fn
-                                     (funcall filter-fn it)
-                                   it)))
+                              (if filter-fn
+                                  (funcall filter-fn it)
+                                it)))
                (title-with-tags (org-roam-completion--completing-read "File: " completions
                                                                       :initial-input region-text))
                (res (cdr (assoc title-with-tags completions)))
