@@ -47,7 +47,6 @@
 (declare-function  org-roam--get-title-path-completions "org-roam")
 (declare-function  org-roam--get-ref-path-completions   "org-roam")
 (declare-function  org-roam--find-file                  "org-roam")
-(declare-function  org-roam-format-link                "org-roam")
 (declare-function  org-roam--split-ref                 "org-roam")
 (declare-function  org-roam-mode                        "org-roam")
 (declare-function  org-roam-completion--completing-read "org-roam-completion")

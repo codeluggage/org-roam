@@ -321,6 +321,15 @@ descriptive warnings when certain operations fail (e.g. parsing).")
         (push (cons prop val) res)))
     res))
 
+(defun org-roam-current-node ()
+  "Return the current node at point, or nil if not a node."
+  (let (id)
+    (org-with-wide-buffer
+     (while (and (not (setq id (org-id-get)))
+                 (not (bobp)))
+       (org-up-heading-or-point-min))
+     id)))
+
 (defun org-roam--url-p (path)
   "Check if PATH is a URL.
 Assume the protocol is not present in PATH; e.g. URL `https://google.com' is
@@ -761,28 +770,6 @@ Each ref is returned as a cons of its type and its key."
            (slug (-reduce-from #'cl-replace (strip-nonspacing-marks title) pairs)))
       (downcase slug))))
 
-(defun org-roam-format-link (target &optional description type link-type)
-  "Formats an org link for a given file TARGET, link DESCRIPTION and link TYPE.
-TYPE defaults to \"file\". LINK-TYPE is the type of file link to
-be generated. Here, we also check if there is an ID for the
-file."
-  (setq type (or type "file"))
-  (when-let ((id (and org-roam-prefer-id-links
-                      (string-equal type "file")
-                      (caar (org-roam-db-query [:select [id] :from ids
-                                                :where (= file $s1)
-                                                :and (= level 0)
-                                                :limit 1]
-                                               target)))))
-    (setq type "id" target id))
-  (when (string-equal type "file")
-    (setq target (org-roam-link-get-path target link-type)))
-  (setq description
-        (if (functionp org-roam-link-title-format)
-            (funcall org-roam-link-title-format description type)
-          (format org-roam-link-title-format description)))
-  (org-link-make-string (concat type ":" target) description))
-
 (defun org-roam--add-tag-string (str tags)
   "Add TAGS to STR.
 
@@ -804,13 +791,13 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
   "Return an alist for completion.
 The car is the displayed title for completion, and the cdr is a
 plist containing the path and title for the file."
-  (let* ((rows (org-roam-db-query [:select [file title tags pos] :from nodes]))
+  (let* ((rows (org-roam-db-query [:select [file id title tags pos] :from nodes]))
          completions)
     (dolist (row rows completions)
-      (pcase-let ((`(,file-path ,title ,tags ,pos) row))
-        (let ((k (org-roam--add-tag-string title tags))
-              (v (list :path file-path :title title :point pos)))
-          (push (cons k v) completions))))))
+      (pcase-let ((`(,file-path ,id ,title ,tags ,pos) row))
+        (push (cons (org-roam--add-tag-string title tags)
+                    (list :path file-path :title title :point pos :id id))
+              completions)))))
 
 (defun org-roam--get-index-path ()
   "Return the path to the index in `org-roam-directory'.
@@ -945,11 +932,8 @@ Return nil if the file does not exist."
                                (_ dest))))))
       (string= current-file backlink-dest))))
 
-(defun org-roam--get-backlinks (targets)
-  "Return the backlinks for TARGETS.
-TARGETS is a list of strings corresponding to the TO value in the
-Org-roam cache. It may be a file, for Org-roam file links, or a
-citation key, for Org-ref cite links."
+(defun org-roam--get-backlinks (node)
+  "Return the backlinks for NODE."
   (unless (listp targets)
     (setq targets (list targets)))
   (let ((conditions (--> targets
@@ -1412,18 +1396,19 @@ If DESCRIPTION is provided, use this as the link label.  See
                (res (cdr (assoc title-with-tags completions)))
                (title (or (plist-get res :title)
                           title-with-tags))
-               (target-file-path (plist-get res :path))
+               (target-id (plist-get res :id))
+               (target-file (plist-get res :path))
                (description (or description region-text title))
                (description (if lowercase
                                 (downcase description)
                               description)))
-          (cond ((and target-file-path
-                      (file-exists-p target-file-path))
+          (cond ((and target-id (file-exists-p target-file))
                  (when region-text
                    (delete-region beg end)
                    (set-marker beg nil)
                    (set-marker end nil))
-                 (insert (org-roam-format-link target-file-path description link-type)))
+                 (insert (org-link-make-string (concat "id:" target-id)
+                                               description)))
                 (t
                  (let ((org-roam-capture--info `((title . ,title-with-tags)
                                                  (slug . ,(funcall org-roam-title-to-slug-function title-with-tags))))
