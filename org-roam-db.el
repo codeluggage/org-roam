@@ -142,6 +142,8 @@ SQL can be either the emacsql vector representation, or a string."
       (file :not-null)
       (level :not-null)
       (pos :not-null)
+      todo
+      priority
       tags
       title
       ref])
@@ -212,7 +214,7 @@ If FILE is nil, clear the current buffer."
                          :where (= ,(if (eq table 'links) 'source 'file) $s1)]
                        file)))
 
-;;;;; Inserting
+;;;;; Updating tables
 (defun org-roam-db-insert-file (&optional update-p)
   "Update the files table for the current buffer.
 If UPDATE-P is non-nil, first remove the file in the database."
@@ -233,8 +235,9 @@ If UPDATE-P is non-nil, first remove the file in the database."
 (defun org-roam-db-insert-nodes (&optional update-p)
   (let ((file (or org-roam-file-name
                   (buffer-file-name (buffer-base-buffer))))
+        heading-components
         nodes
-        id level pos tags title ref)
+        id level pos todo priority tags title ref)
     (when update-p
       (org-roam-db-query [:delete :from nodes
                           :where (= file $s1)]
@@ -244,25 +247,28 @@ If UPDATE-P is non-nil, first remove the file in the database."
       (when (setq id (org-id-get-create))
         (setq title (cadr (assoc "TITLE" (org-collect-keywords '("title"))
                                  #'string-equal))
-              ;; TODO handle tags
-              tags nil
+              tags org-file-tags
               pos (point)
+              todo nil
+              priority nil
               level (org-outline-level)
               ;; TODO handle ref
               ref nil)
-        (push (vector id file level pos tags title ref) nodes))
+        (push (vector id file level pos todo priority tags title ref) nodes))
       ;; Then we loop over all headlines
       (org-map-entries
        (lambda ()
          (when (setq id (org-id-get))
-           (setq title (nth 4 (org-heading-components))
-              ;; TODO handle tags
-              tags nil
+           (setq heading-components (org-heading-components))
+           (setq title (nth 4 heading-components)
+              tags (org-get-tags)
               pos (point)
-              level (org-outline-level)
+              todo (nth 2 heading-components)
+              priority (nth 3 heading-components)
+              level (nth 1 heading-components)
               ;; TODO handle ref
               ref nil)
-           (push (vector id file level pos tags title ref) nodes)))))
+           (push (vector id file level pos todo priority tags title ref) nodes)))))
     (when nodes
       (org-roam-db-query
        [:insert :into nodes
@@ -410,10 +416,11 @@ If FORCE, force a rebuild of the cache from scratch."
                          contents-hash)
           (push file modified-files)))
       (remhash file current-files))
-    ;; These files are no longer around, remove from cache...
-    (dolist (file (hash-table-keys current-files))
+    (dolist-with-progress-reporter (file (hash-table-keys current-files))
+      "Clearing removed files..."
       (org-roam-db-clear-file file))
-    (dolist (file modified-files)
+    (dolist-with-progress-reporter (file modified-files)
+        "Processing modified files..."
       (org-roam-db-update-file file))))
 
 (defun org-roam-db-update-file (&optional file-path)
@@ -426,10 +433,11 @@ If the file exists, update the cache with information."
                               :where (= file $s1)] file-path))))
     (unless (string= content-hash db-hash)
       (org-roam-with-file file-path nil
-        (org-roam-db-clear-file 'update)
-        (org-roam-db-insert-file 'update)
-        (org-roam-db-insert-nodes 'update)
-        (org-roam-db-insert-links 'update)))))
+        (save-excursion
+          (org-roam-db-clear-file 'update)
+          (org-roam-db-insert-file 'update)
+          (org-roam-db-insert-nodes 'update)
+          (org-roam-db-insert-links 'update))))))
 
 (provide 'org-roam-db)
 
