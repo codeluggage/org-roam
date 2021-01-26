@@ -454,10 +454,14 @@ recursion."
 
 (defun org-roam--list-files-elisp (dir)
   "Return all Org-roam files located recursively within DIR, using elisp."
-  (let ((regex (concat "\\.\\(?:"(mapconcat #'regexp-quote org-roam-file-extensions "\\|" )"\\)\\(?:\\.gpg\\)?\\'"))
-        result)
-    (dolist (file (org-roam--directory-files-recursively dir regex nil nil t) result)
-      (when (and (file-readable-p file) (org-roam--org-file-p file))
+  (let* ((file-regex (concat "\\.\\(?:"
+                             (mapconcat #'regexp-quote org-roam-file-extensions "\\|")
+                             "\\)\\(?:\\.gpg\\)?\\'"))
+         (files (org-roam--directory-files-recursively dir file-regex nil nil t))
+         result)
+    (dolist (file files result)
+      (when (and (file-readable-p file)
+                 (org-roam--org-file-p file))
         (push file result)))))
 
 (defun org-roam--list-files (dir)
@@ -1052,7 +1056,10 @@ description, and the description will not be updated. Else,
 update with NEW-DESC."
   (org-with-point-at 1
     (while (re-search-forward org-link-bracket-re nil t)
-      (when-let ((link (save-match-data (org-roam--get-link-replacement old-path new-path old-desc new-desc))))
+      (when-let ((link (save-match-data
+                         (org-roam--get-link-replacement
+                          old-path new-path
+                          old-desc new-desc))))
         (replace-match link)))))
 
 (defun org-roam--fix-relative-links (old-path)
@@ -1067,8 +1074,9 @@ replaced links are made relative to the current buffer."
           (setq path (org-element-property :path link))
           (when (and (string= type "file")
                      (f-relative-p path))
+            (setq path (expand-file-name path (file-name-directory old-path)))
             (setq new-link
-                  (concat type ":" (org-roam-link-get-path (expand-file-name path (file-name-directory old-path)))))
+                  (concat type ":" (org-roam-link-get-path path)))
             (replace-match new-link nil t nil 1)))))))
 
 (defcustom org-roam-rename-file-on-title-change t
@@ -1227,7 +1235,8 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
         (add-hook 'after-save-hook #'org-roam-db-update-file nil t)))
     (org-roam-db-build-cache))
    (t
-    (setq org-execute-file-search-functions (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
+    (setq org-execute-file-search-functions
+          (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
     (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
     (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
     (advice-remove 'rename-file #'org-roam--rename-file-advice)
@@ -1371,14 +1380,16 @@ If DESCRIPTION is provided, use this as the link label.  See
                  (insert (org-link-make-string (concat "id:" target-id)
                                                description)))
                 (t
-                 (let ((org-roam-capture--info `((title . ,title-with-tags)
-                                                 (slug . ,(funcall org-roam-title-to-slug-function title-with-tags))))
+                 (let ((org-roam-capture--info
+                        `((title . ,title-with-tags)
+                          (slug . ,(funcall org-roam-title-to-slug-function title-with-tags))))
                        (org-roam-capture--context 'title))
-                   (setq org-roam-capture-additional-template-props (list :region (org-roam-shield-region beg end)
-                                                                          :insert-at (point-marker)
-                                                                          :link-type link-type
-                                                                          :link-description description
-                                                                          :finalize 'insert-link))
+                   (setq org-roam-capture-additional-template-props
+                         (list :region (org-roam-shield-region beg end)
+                               :insert-at (point-marker)
+                               :link-type link-type
+                               :link-description description
+                               :finalize 'insert-link))
                    (org-roam-capture--capture))))
           res))
     (deactivate-mark)))
@@ -1511,7 +1522,8 @@ the executable 'rg' in variable `exec-path'."
   (unless (org-roam--org-roam-file-p)
     (user-error "Not in org-roam file"))
   (if (not (executable-find "rg"))
-      (error "Cannot find the ripgrep executable \"rg\". Check that it is installed and available on `exec-path'")
+      (error (concat "Cannot find the ripgrep executable \"rg\". "
+                     "Check that it is installed and available on `exec-path'"))
     (when (string-match "PCRE2 is not available" (shell-command-to-string "rg --pcre2-version"))
       (error "\"rg\" must be compiled with PCRE2 support"))
     (let* ((titles (org-roam--extract-titles))
