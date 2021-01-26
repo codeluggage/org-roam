@@ -45,10 +45,7 @@
   "org-roam 1.0.0")
 (define-obsolete-function-alias 'org-roam-show-graph  'org-roam-graph-show
   "org-roam 1.0.0")
-(define-obsolete-function-alias 'org-roam--maybe-update-buffer
-  'org-roam-buffer--update-maybe "org-roam 1.0.0")
-(define-obsolete-function-alias 'org-roam--current-visibility
-  'org-roam-buffer--visibility "org-roam 1.0.0")
+(define-obsolete-function-alias 'org-roam--current-visibility 'org-roam-buffer--visibility "org-roam 1.0.0")
 (define-obsolete-function-alias 'org-roam-update         'org-roam-buffer-update
   "org-roam 1.0.0")
 (define-obsolete-function-alias 'org-roam--set-width     'org-roam-buffer--set-width

@@ -55,7 +55,6 @@
 (declare-function org-roam--list-all-files                 "org-roam")
 (declare-function org-roam--path-to-slug                   "org-roam")
 (declare-function org-roam--file-name-extension            "org-roam")
-(declare-function org-roam-buffer--update-maybe            "org-roam-buffer")
 
 ;;;; Options
 (defcustom org-roam-db-location (expand-file-name "org-roam.db" user-emacs-directory)

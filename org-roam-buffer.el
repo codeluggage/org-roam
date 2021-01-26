@@ -71,7 +71,7 @@ Items are of the form: ((key (list of values for key)))")
   "Return t if WIDGET is to be shown, nil otherwise."
   (funcall (oref widget show-p) node))
 
-(cl-defmethod org-roam-widget-render ((widget org-roam-widget))
+(cl-defmethod org-roam-widget-render ((widget org-roam-widget) node)
   "Render items in WIDGET."
   (magit-insert-section (widget-root)
     (magit-insert-heading (oref widget header))
@@ -230,7 +230,7 @@ Items are of the form: ((key (list of values for key)))")
                                    (format "%s:%s" row col))
                                   'font-lock-face 'org-roam-rowcol)
                       " "
-                      (org-roam-db--get-title file)
+                      file
                       "\n"))
             (setq empty nil)))))
     empty))
@@ -266,3 +266,6 @@ Items are of the form: ((key (list of values for key)))")
              (when (org-roam-widget-show widget node)
                (org-roam-widget-render widget node))))))
      (switch-to-buffer-other-window buffer)))
+
+(provide 'org-roam-buffer)
+;;; org-roam-buffer.el ends here

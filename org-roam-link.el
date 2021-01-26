@@ -29,7 +29,7 @@
 ;;; Commentary:
 ;;
 ;; This adds the custom `roam:' link to Org-roam. `roam:' links allow linking to
-;; Org-roam files via their titles and headlines.
+;; Org-roam files via the node titles.
 ;;
 ;;; Code:
 ;;;; Dependencies
@@ -52,24 +52,8 @@
   :group 'org-roam
   :type 'boolean)
 
-(defcustom org-roam-link-file-path-type 'relative
-  "How the path name in file links should be stored.
-Valid values are:
-
-relative  Relative to the current directory, i.e. the directory of the file
-          into which the link is being inserted.
-absolute  Absolute path, if possible with ~ for home directory.
-noabbrev  Absolute path, no abbreviation of home directory."
-  :group 'org-roam
-  :type '(choice
-          (const relative)
-          (const absolute)
-          (const noabbrev))
-  :safe #'symbolp)
-
 ;;; the roam: link
-(org-link-set-parameters "roam"
-                         :follow #'org-roam-link-follow-link)
+(org-link-set-parameters "roam" :follow #'org-roam-link-follow-link)
 
 (defun org-roam-link-follow-link (_path)
   "Navigates to location in Org-roam link.
@@ -156,18 +140,6 @@ If there is no corresponding headline, return nil."
                   (org-id-get-create))))))))
 
 ;;; Path-related functions
-(defun org-roam-link-get-path (path &optional type)
-  "Return the PATH of the link to use.
-If TYPE is non-nil, create a link of TYPE. Otherwise, respect
-`org-link-file-path-type'."
-  (pcase (or type org-roam-link-file-path-type)
-      ('absolute
-       (abbreviate-file-name (expand-file-name path)))
-      ('noabbrev
-       (expand-file-name path))
-      ('relative
-       (file-relative-name path))))
-
 (defun org-roam-link--split-path (path)
   "Splits PATH into title and headline.
 Return a list of the form (type title has-headline-p headline star-idx).
