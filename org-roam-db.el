@@ -43,8 +43,6 @@
 
 (defvar org-roam-directory)
 (defvar org-roam-verbose)
-(defvar org-roam-file-name)
-
 (defvar org-agenda-files)
 
 (declare-function org-roam--org-roam-file-p                "org-roam")
@@ -54,6 +52,7 @@
 (declare-function org-roam--list-all-files                 "org-roam")
 (declare-function org-roam--path-to-slug                   "org-roam")
 (declare-function org-roam--file-name-extension            "org-roam")
+(declare-function org-roam-current-node                    "org-roam")
 
 ;;;; Options
 (defcustom org-roam-db-location (expand-file-name "org-roam.db" user-emacs-directory)
@@ -130,6 +129,7 @@ SQL can be either the emacsql vector representation, or a string."
     (apply #'emacsql (org-roam-db) sql args)))
 
 ;;;; Schemata
+;; NOTE: Foreign key somehow doesn't work! Adding a file column to every table as a workaround.
 (defconst org-roam-db--table-schemata
   '((files
      [(file :unique :primary-key)
@@ -146,9 +146,30 @@ SQL can be either the emacsql vector representation, or a string."
       priority
       (scheduled text)
       (deadline text)
-      tags
-      title
-      ref])
+      title]
+     (:foreign-key [file] :references files [file]
+      :on-delete :cascade))
+
+    (aliases
+     [(file :not-null)
+      (node-id :not-null)
+      alias]
+     (:foreign-key [node-id] :references nodes [id]
+      :on-delete :cascade))
+
+    (refs
+     ([(file :not-null)
+       (node-id :not-null)
+       ref]
+      (:foreign-key [node-id] :references nodes [id]
+       :on-delete :cascade)))
+
+    (tags
+     [(file :not-null)
+      (node-id :not-null)
+      tag]
+     (:foreign-key [node-id] :references nodes [id]
+      :on-delete :cascade))
 
     (links
      [(file :not-null)
@@ -156,12 +177,15 @@ SQL can be either the emacsql vector representation, or a string."
       (source :not-null)
       (dest :not-null)
       (type :not-null)
-      (properties :not-null)])))
+      (properties :not-null)]
+     (:foreign-key [file] :references files [file]
+      :on-delete :cascade))))
 
 (defun org-roam-db--init (db)
   "Initialize database DB with the correct schema and user version."
   (emacsql-with-transaction db
-    (pcase-dolist (`(,table . ,schema) org-roam-db--table-schemata)
+    (emacsql db "PRAGMA foreign_keys = ON")
+    (pcase-dolist (`(,table ,schema) org-roam-db--table-schemata)
       (emacsql db [:create-table $i1 $S2] table schema))
     (emacsql db (format "PRAGMA user_version = %s" org-roam-db--version))))
 
@@ -206,22 +230,18 @@ If FILE is nil, clear the current buffer."
   (setq file (or file (buffer-file-name (buffer-base-buffer))))
   (dolist (table (mapcar #'car org-roam-db--table-schemata))
     (org-roam-db-query `[:delete :from ,table
-                         :where (= ,(if (eq table 'links) 'source 'file) $s1)]
+                         :where (= file $s1)]
                        file)))
 
 ;;;;; Updating tables
-(defun org-roam-db-insert-file (&optional update-p)
+(defun org-roam-db-insert-file ()
   "Update the files table for the current buffer.
 If UPDATE-P is non-nil, first remove the file in the database."
-  (let* ((file (or org-roam-file-name (buffer-file-name)))
+  (let* ((file (buffer-file-name))
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
          (hash (org-roam-db--file-hash)))
-    (when update-p
-      (org-roam-db-query [:delete :from files
-                          :where (= file $s1)]
-                         file))
     (org-roam-db-query
      [:insert :into files
       :values $v1]
@@ -237,78 +257,103 @@ If UPDATE-P is non-nil, first remove the file in the database."
   (when-let ((time (org-get-deadline-time (point))))
     (org-format-time-string "%FT%T%z" time)))
 
-(defun org-roam-db-insert-nodes (&optional update-p)
-  (let ((file (or org-roam-file-name
-                  (buffer-file-name (buffer-base-buffer))))
-        heading-components
-        nodes
-        id level pos todo priority scheduled deadline tags title ref)
-    (when update-p
-      (org-roam-db-query [:delete :from nodes
-                          :where (= file $s1)]
-                         file))
-    (org-with-point-at 1
-      ;; First, we get the file-level ID
-      (when (setq id (org-id-get-create))
-        (setq title (cadr (assoc "TITLE" (org-collect-keywords '("title"))
-                                 #'string-equal))
-              tags org-file-tags
-              pos (point)
-              todo nil
-              priority nil
-              scheduled nil
-              deadline nil
-              level (org-outline-level)
-              ref (org-entry-get (point) "ROAM_REF"))
-        (push (vector id file level pos todo priority
-                      scheduled deadline tags title ref) nodes))
-      ;; Then we loop over all headlines
-      (org-map-entries
-       (lambda ()
-         (when (setq id (org-id-get))
-           (setq heading-components (org-heading-components))
-           (setq title (nth 4 heading-components)
-              tags (org-get-tags)
-              pos (point)
-              todo (nth 2 heading-components)
-              priority (nth 3 heading-components)
-              level (nth 1 heading-components)
-              scheduled (org-roam-db-get-scheduled-time)
-              deadline (org-roam-db-get-deadline-time)
-              ref (org-entry-get (point) "ROAM_REF"))
-           (push (vector id file level pos todo
-                         priority scheduled deadline
-                         tags title ref) nodes)))))
-    (when nodes
+(defun org-roam-db-map-headlines (fns)
+  "Run FNS over all headlines in the current buffer."
+  (org-with-point-at 1
+    (org-map-entries
+     (lambda ()
+       (dolist (fn fns)
+         (funcall fn))))))
+
+(defun org-roam-db-map-links (fns)
+  "Run FNS over all links in the current buffer."
+  (org-with-point-at 1
+    (org-element-map (org-element-parse-buffer) 'link
+      (lambda (link)
+        (dolist (fn fns)
+          (funcall fn link))))))
+
+(defun org-roam-db-insert-file-node ()
+  "Insert the file-level node into the Org-roam cache."
+  (org-with-point-at 1
+    (let ((file (buffer-file-name (buffer-base-buffer)))
+          (title (cadr (assoc "TITLE" (org-collect-keywords '("title"))
+                              #'string-equal)))
+          (id (org-id-get-create))
+          (pos (point))
+          (todo nil)
+          (priority nil)
+          (scheduled nil)
+          (deadline nil)
+          (level 0)
+          (aliases (org-entry-get (point) "ROAM_ALIASES")))
       (org-roam-db-query
        [:insert :into nodes
         :values $v1]
-       nodes))))
+       (vector id file level pos todo priority
+               scheduled deadline title))
+      (when aliases
+        (org-roam-db-query
+         [:insert :into aliases
+          :values $v1]
+         (mapcar (lambda (alias)
+                   (vector file id alias))
+                 (split-string-and-unquote aliases)))))))
 
-(defun org-roam-db-insert-links (&optional update-p)
-  (let ((file (or org-roam-file-name
-                  (buffer-file-name (buffer-base-buffer))))
-        links source dest type poperties)
-    (when update-p
-      (org-roam-db-query [:delete :from links
-                          :where (= file $s1)]
-                         file))
-    (org-roam-with-file file nil
-      (org-element-map (org-element-parse-buffer) 'link
-        (lambda (link)
-          (goto-char (org-element-property :begin link))
-          (setq type (org-element-property :type link)
-                dest (org-element-property :path link)
-                properties (list :outline (org-roam--get-outline-path)))
-          (save-excursion
-            (while (not (setq source (org-id-get)))
-              (org-up-heading-or-point-min)))
-          (push (vector file (point) source dest type properties) links))))
-    (when links
+(defun org-roam-db-insert-node-data ()
+  "Insert node data for headline at point into the Org-roam cache."
+  (when-let ((id (org-id-get)))
+    (let* ((file (buffer-file-name (buffer-base-buffer)))
+           (heading-components (org-heading-components))
+           (pos (point))
+           (todo (nth 2 heading-components))
+           (priority (nth 3 heading-components))
+           (level (nth 1 heading-components))
+           (scheduled (org-roam-db-get-scheduled-time))
+           (deadline (org-roam-db-get-deadline-time))
+           (title (nth 4 heading-components)))
+      (org-roam-db-query
+       [:insert :into nodes
+        :values $v1]
+       (vector id file level pos todo priority
+               scheduled deadline title)))))
+
+(defun org-roam-db-insert-aliases ()
+  "Insert aliases for node at point into Org-roam cache."
+  (when-let ((file (buffer-file-name (buffer-base-buffer)))
+             (node-id (org-id-get))
+             (aliases (org-entry-get (point) "ROAM_ALIASES")))
+    (org-roam-db-query [:insert :into aliases
+                        :values $v1]
+                       (mapcar (lambda (alias)
+                                 (vector file node-id alias))
+                               (split-string-and-unquote aliases))))
+
+(defun org-roam-db-insert-tags ()
+  "Insert tags for node at point into Org-roam cache."
+  (when-let ((file (buffer-file-name (buffer-base-buffer)))
+             (node-id (org-id-get))
+             (tags (org-get-tags)))
+    (org-roam-db-query [:insert :into tags
+                        :values $v1]
+                       (mapcar (lambda (tag)
+                                 (vector file node-id tag)) tags))))
+
+(defun org-roam-db-insert-link (link)
+  "Insert link data for LINK at current point into the Org-roam cache."
+  (save-excursion
+    (goto-char (org-element-property :begin link))
+    (let ((file (buffer-file-name (buffer-base-buffer)))
+          (type (org-element-property :type link))
+          (dest (org-element-property :path link))
+          (properties (list :outline (org-roam--get-outline-path)))
+          source)
+      (while (not (setq source (org-id-get)))
+        (org-up-heading-or-point-min))
       (org-roam-db-query
        [:insert :into links
         :values $v1]
-       links))))
+       (vector file (point) source dest type properties)))))
 
 ;;;;; Fetching
 (defun org-roam-db--get-current-files ()
@@ -325,16 +370,6 @@ If UPDATE-P is non-nil, first remove the file in the database."
                             :where (= file $s1)
                             :limit 1]
                            file)))
-
-(defun org-roam-db--get-tags ()
-  "Return all distinct tags from the cache."
-  (let ((rows (org-roam-db-query [:select :distinct [tags] :from tags]))
-        acc)
-    (dolist (row rows)
-      (dolist (tag (car row))
-        (unless (member tag acc)
-          (push tag acc))))
-    acc))
 
 (defun org-roam-db--connected-component (file)
   "Return all files reachable from/connected to FILE, including the file itself.
@@ -437,10 +472,31 @@ If the file exists, update the cache with information."
     (unless (string= content-hash db-hash)
       (org-roam-with-file file-path nil
         (save-excursion
-          (org-roam-db-clear-file 'update)
-          (org-roam-db-insert-file 'update)
-          (org-roam-db-insert-nodes 'update)
-          (org-roam-db-insert-links 'update))))))
+          (org-roam-db-clear-file)
+          (org-roam-db-insert-file)
+          (org-roam-db-insert-file-node)
+          (org-roam-db-map-headlines
+           (list #'org-roam-db-insert-node-data
+                 #'org-roam-db-insert-aliases
+                 #'org-roam-db-insert-tags))
+          (org-roam-db-map-links
+           (list #'org-roam-db-insert-link)))))))
+
+;; Diagnostic Interactives
+(defun org-roam-db-diagnose-node ()
+  "Print information about node at point."
+  (interactive)
+  (let* ((node (org-roam-current-node))
+         (aliases (org-roam-db-query [:select [alias] :from aliases
+                                      :where (= node_id $s1)]
+                                     node))
+         (tags (org-roam-db-query [:select [tag] :from tags
+                                   :where (= node_id $s1)]
+                                  node)))
+    (message "Aliases: %s\nTags: %s"
+             (string-join (mapcar #'car aliases) ", ")
+             (string-join (mapcar #'car tags) ", "))))
+)
 
 (provide 'org-roam-db)
 

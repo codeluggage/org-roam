@@ -44,11 +44,11 @@
         (new-dir (expand-file-name (make-temp-name "org-roam") temporary-file-directory)))
     (copy-directory original-dir new-dir)
     (setq org-roam-directory new-dir)
-    (org-roam-mode +1)
+    (org-roam-setup)
     (sleep-for 2)))
 
 (defun test-org-roam--teardown ()
-  (org-roam-mode -1)
+  (org-roam-teardown)
   (delete-file org-roam-db-location)
   (org-roam-db--close))
 
@@ -286,49 +286,7 @@
 
   (it "initializes correctly"
     ;; Cache
-    (expect (caar (org-roam-db-query [:select (funcall count) :from files])) :to-be 8)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links])) :to-be 5)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from titles])) :to-be 8)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from titles
-                                      :where titles :is-null])) :to-be 1)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from refs])) :to-be 1)
-
-    ;; Links
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links
-                                      :where (= source $s1)]
-                                     (test-org-roam--abs-path "foo.org"))) :to-be 1)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links
-                                      :where (= source $s1)]
-                                     (test-org-roam--abs-path "nested/bar.org"))) :to-be 2)
-
-    ;; Links -- File-to
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links
-                                      :where (= dest $s1)]
-                                     (test-org-roam--abs-path "nested/foo.org"))) :to-be 1)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links
-                                      :where (= dest $s1)]
-                                     (test-org-roam--abs-path "nested/bar.org"))) :to-be 1)
-    (expect (caar (org-roam-db-query [:select (funcall count) :from links
-                                      :where (= dest $s1)]
-                                     (test-org-roam--abs-path "unlinked.org"))) :to-be 0)
-    ;; TODO Test titles
-    (expect (org-roam-db-query [:select * :from titles])
-            :to-have-same-items-as
-            (list (list (test-org-roam--abs-path "alias.org")
-                        (list "t1" "a1" "a 2"))
-                  (list (test-org-roam--abs-path "bar.org")
-                        (list "Bar"))
-                  (list (test-org-roam--abs-path "foo.org")
-                        (list "Foo"))
-                  (list (test-org-roam--abs-path "nested/bar.org")
-                        (list "Nested Bar"))
-                  (list (test-org-roam--abs-path "nested/foo.org")
-                        (list "Nested Foo"))
-                  (list (test-org-roam--abs-path "no-title.org")
-                        (list "Headline title"))
-                  (list (test-org-roam--abs-path "web_ref.org") nil)
-                  (list (test-org-roam--abs-path "unlinked.org")
-                        (list "Unlinked"))))
+    ;; TODO: Write tests
 
     (expect (org-roam-db-query [:select * :from refs])
             :to-have-same-items-as

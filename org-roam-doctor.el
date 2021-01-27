@@ -53,10 +53,8 @@
 (declare-function org-roam--get-roam-buffers "org-roam")
 (declare-function org-roam--list-all-files "org-roam")
 (declare-function org-roam--org-roam-file-p "org-roam")
-(declare-function org-roam-mode "org-roam")
 
 (defvar org-roam-verbose)
-(defvar org-roam-mode)
 
 (defcustom org-roam-doctor-inhibit-startup t
   "Inhibit `org-mode' startup when processing files with `org-doctor'.
@@ -291,12 +289,11 @@ CHECKER is a org-roam-doctor checker instance."
   "Perform a check on the current buffer to ensure cleanliness.
 If CHECKALL, run the check for all Org-roam files."
   (interactive "P")
-  (unless org-roam-mode (org-roam-mode))
   (let ((files (if checkall
-                  (org-roam--list-all-files)
-                (unless (org-roam--org-roam-file-p)
-                  (user-error "Not in an org-roam file"))
-                `(,(buffer-file-name)))))
+                   (org-roam--list-all-files)
+                 (unless (org-roam--org-roam-file-p)
+                   (user-error "Not in an org-roam file"))
+                 `(,(buffer-file-name)))))
     (org-roam-doctor-start files org-roam-doctor--checkers)))
 
 (defun org-roam-doctor-start (files checkers)

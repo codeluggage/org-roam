@@ -40,10 +40,8 @@
 (require 'f)
 
 ;;;; Declarations
-(defvar org-roam-mode)
 (defvar org-roam-directory)
 (declare-function org-roam--org-file-p        "org-roam")
-(declare-function org-roam-mode               "org-roam")
 
 ;;;; Customizable variables
 (defcustom org-roam-dailies-directory "daily/"
@@ -145,9 +143,8 @@ If FILE is not specified, use the current buffer's file-path."
   "Capture an entry in a daily-note for TIME, creating it if necessary.
 
 When GOTO is non-nil, go the note without creating an entry."
-  (unless org-roam-mode (org-roam-mode))
   (let ((org-roam-capture-templates (--> org-roam-dailies-capture-templates
-                                         (if goto (list (car it)) it)))
+                                      (if goto (list (car it)) it)))
         (org-roam-capture--info (list (cons 'time time)))
         (org-roam-capture--context 'dailies))
     (org-roam-capture--capture (when goto '(4)))))

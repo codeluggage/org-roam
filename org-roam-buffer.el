@@ -33,6 +33,9 @@
 (require 'eieio)
 (require 'magit-section)
 
+(defvar-local org-roam-buffer-node nil
+  "Node ID that is currently displayed in the buffer.")
+
 ;; Faces
 (defface org-roam-title
   '((t :weight bold))
@@ -198,7 +201,11 @@ Items are of the form: ((key (list of values for key)))")
                                           :where (= id $v1)
                                           :limit 1]
                                          (vector node))))
-         (titles (list title))
+         (aliases (mapcar #'car
+                          (org-roam-db-query [:select [alias] :from aliases
+                                              :where (= node_id $s1)]
+                                             node)))
+         (titles (cons title aliases))
          (rg-command (concat "rg -o --vimgrep -P -i "
                              (string-join (mapcar (lambda (glob) (concat "-g " glob))
                                                   (org-roam--list-files-search-globs org-roam-file-extensions)) " ")
@@ -207,10 +214,12 @@ Items are of the form: ((key (list of values for key)))")
                                                   (format "|(\\b%s\\b)" (shell-quote-argument title)))
                                                 titles ""))
                              org-roam-directory)))
-    (split-string (shell-command-to-string rg-command) "\n")))
+    (list :titles titles
+          :results (split-string (shell-command-to-string rg-command) "\n"))))
 
-(defun org-roam-widget-render-unlinked-references (lines)
-  (let ((empty t)
+(defun org-roam-widget-render-unlinked-references (results)
+  (let ((titles (plist-get results :titles))
+        (lines (plist-get results :results))
         file row col match)
     (dolist (line lines)
       (save-match-data
@@ -220,20 +229,17 @@ Items are of the form: ((key (list of values for key)))")
                 col (match-string 3 line)
                 match (match-string 4 line))
           (when (and match
-                     ;; (member (downcase match) (mapcar #'downcase titles))
-                     ;; (not (f-equal-p (expand-file-name file org-roam-directory)
-                     ;;                 (buffer-file-name org-roam-buffer--current)))
-                     )
+                     (member (downcase match) (mapcar #'downcase titles)))
             (magit-insert-section (unlinked-reference)
               (insert (propertize (format
                                    "%-8s"
                                    (format "%s:%s" row col))
                                   'font-lock-face 'org-roam-rowcol)
                       " "
+                      match
+                      " "
                       file
-                      "\n"))
-            (setq empty nil)))))
-    empty))
+                      "\n"))))))))
 
 (defvar org-roam-widget-unlinked-references
   (org-roam-widget :name 'unlinked-refs
@@ -257,7 +263,8 @@ Items are of the form: ((key (list of values for key)))")
                  (concat "org-roam: "
                          (buffer-file-name))))
         (node (org-roam-current-node)))
-     (with-current-buffer buffer
+    (with-current-buffer buffer
+      (setq-local org-roam-buffer-node node)
        (let ((inhibit-read-only t))
          (erase-buffer)
          (magit-section-mode)

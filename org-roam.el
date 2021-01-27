@@ -755,11 +755,12 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
   "Return an alist for completion.
 The car is the displayed title for completion, and the cdr is a
 plist containing the path and title for the file."
-  (let* ((rows (org-roam-db-query [:select [file id title tags pos] :from nodes]))
+  ;; TODO: Handle aliases and tags
+  (let* ((rows (org-roam-db-query [:select [file id title pos] :from nodes]))
          completions)
     (dolist (row rows completions)
-      (pcase-let ((`(,file-path ,id ,title ,tags ,pos) row))
-        (push (cons (org-roam--add-tag-string title tags)
+      (pcase-let ((`(,file-path ,id ,title ,pos) row))
+        (push (cons title
                     (list :path file-path :title title :point pos :id id))
               completions)))))
 
@@ -977,7 +978,7 @@ This is active when `org-roam-completion-everywhere' is non-nil."
 
 ;;; Org-roam-mode
 ;;;; Function Faces
-;; These faces are used by `org-link-set-parameters', which take one argument,
+;; These faces are usnnnnnnnned by `org-link-set-parameters', which take one argument,
 ;; which is the path.
 (defcustom org-roam-link-use-custom-faces t
   "Define where to apply custom faces to Org-roam links.
@@ -997,13 +998,42 @@ Otherwise, do not apply custom faces to Org-roam links."
   :group 'org-roam)
 
 ;;;; Hooks and Advices
-(defcustom org-roam-file-setup-hook nil
-  "Hook that is run on setting up an Org-roam file."
-  :group 'org-roam
-  :type 'hook)
+(defun org-roam-setup ()
+  "Setup Org-roam"
+  (interactive)
+  (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
+                   (file-executable-p emacsql-sqlite3-executable))
+              (executable-find "sqlite3"))
+    (lwarn '(org-roam) :error "Cannot find executable 'sqlite3'. \
+Ensure it is installed and can be found within `exec-path'. \
+M-x info for more information at Org-roam > Installation > Post-Installation Tasks."))
+  (add-to-list 'org-execute-file-search-functions 'org-roam--execute-file-row-col)
+  (add-hook 'find-file-hook #'org-roam--find-file-hook-function)
+  (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
+  (advice-add 'rename-file :after #'org-roam--rename-file-advice)
+  (advice-add 'delete-file :before #'org-roam--delete-file-advice)
+  (advice-add 'org-id-new :after #'org-roam--id-new-advice)
+  (org-roam-db-build-cache))
+
+(defun org-roam-teardown ()
+  "Teardown Org-roam."
+  (interactive)
+  (setq org-execute-file-search-functions
+        (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
+  (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
+  (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
+  (advice-remove 'rename-file #'org-roam--rename-file-advice)
+  (advice-remove 'delete-file #'org-roam--delete-file-advice)
+  (advice-remove 'org-id-new #'org-roam--id-new-advice)
+  (org-roam-db--close-all)
+  ;; Disable local hooks for all org-roam buffers
+  (dolist (buf (org-roam--get-roam-buffers))
+    (with-current-buffer buf
+      (remove-hook 'before-save-hook #'org-roam-link--replace-link-on-save t)
+      (remove-hook 'after-save-hook #'org-roam-db-update-file t))))
 
 (defun org-roam--find-file-hook-function ()
-  "Called by `find-file-hook' when mode symbol `org-roam-mode' is on."
+  "Setup automatic database updates."
   (when (org-roam--org-roam-file-p)
     (setq org-roam-last-window (get-buffer-window))
     (run-hooks 'org-roam-file-setup-hook) ; Run user hooks
@@ -1184,61 +1214,6 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
              (not (org-roam-capture-p)))
     (org-roam-db-update-file)))
 
-;;;###autoload
-(define-minor-mode org-roam-mode
-  "Minor mode for Org-roam.
-
-This mode sets up several hooks, to ensure that the cache is updated on file
-changes, renames and deletes. It is also in charge of graceful termination of
-the database connection.
-
-When called interactively, toggle `org-roam-mode'. with prefix
-ARG, enable `org-roam-mode' if ARG is positive, otherwise disable
-it.
-
-When called from Lisp, enable `org-roam-mode' if ARG is omitted,
-nil, or positive. If ARG is `toggle', toggle `org-roam-mode'.
-Otherwise, behave as if called interactively."
-  :lighter " Org-roam"
-  :keymap  (let ((map (make-sparse-keymap)))
-             map)
-  :group 'org-roam
-  :require 'org-roam
-  :global t
-  (cond
-   (org-roam-mode
-    (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
-                     (file-executable-p emacsql-sqlite3-executable))
-                (executable-find "sqlite3"))
-      (lwarn '(org-roam) :error "Cannot find executable 'sqlite3'. \
-Ensure it is installed and can be found within `exec-path'. \
-M-x info for more information at Org-roam > Installation > Post-Installation Tasks."))
-    (add-to-list 'org-execute-file-search-functions 'org-roam--execute-file-row-col)
-    (add-hook 'find-file-hook #'org-roam--find-file-hook-function)
-    (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-    (advice-add 'rename-file :after #'org-roam--rename-file-advice)
-    (advice-add 'delete-file :before #'org-roam--delete-file-advice)
-    (advice-add 'org-id-new :after #'org-roam--id-new-advice)
-    (dolist (buf (org-roam--get-roam-buffers))
-      (with-current-buffer buf
-        (add-hook 'before-save-hook #'org-roam-link--replace-link-on-save nil t)
-        (add-hook 'after-save-hook #'org-roam-db-update-file nil t)))
-    (org-roam-db-build-cache))
-   (t
-    (setq org-execute-file-search-functions
-          (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
-    (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
-    (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
-    (advice-remove 'rename-file #'org-roam--rename-file-advice)
-    (advice-remove 'delete-file #'org-roam--delete-file-advice)
-    (advice-remove 'org-id-new #'org-roam--id-new-advice)
-    (org-roam-db--close-all)
-    ;; Disable local hooks for all org-roam buffers
-    (dolist (buf (org-roam--get-roam-buffers))
-      (with-current-buffer buf
-        (remove-hook 'before-save-hook #'org-roam-link--replace-link-on-save t)
-        (remove-hook 'after-save-hook #'org-roam-db-update-file t))))))
-
 ;;; Interactive Commands
 ;;;###autoload
 (defalias 'org-roam 'org-roam-buffer-toggle-display)
@@ -1270,7 +1245,6 @@ which takes as its argument an alist of path-completions.  See
 `org-roam--get-title-path-completions' for details.
 If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
   (let* ((completions (org-roam--get-title-path-completions))
          (title-with-tags (if no-confirm
                               initial-prompt
@@ -1307,7 +1281,6 @@ takes three arguments: the type, the ref, and the file of the
 current candidate.  It should return t if that candidate is to be
 included as a candidate."
   (interactive "p")
-  (unless org-roam-mode (org-roam-mode))
   (let* ((completions (org-roam--get-ref-path-completions arg filter))
          (ref (org-roam-completion--completing-read "Ref: "
                                                     completions
@@ -1335,7 +1308,6 @@ which takes as its argument an alist of path-completions.
 If DESCRIPTION is provided, use this as the link label.  See
 `org-roam--get-title-path-completions' for details."
   (interactive "P")
-  (unless org-roam-mode (org-roam-mode))
   ;; Deactivate the mark on quit since `atomic-change-group' prevents it
   (unwind-protect
       ;; Group functions together to avoid inconsistent state on quit
@@ -1416,7 +1388,6 @@ Otherwise, the function will look in your `org-roam-directory'
 for a note whose title is 'Index'.  If it does not exist, the
 command will offer you to create one."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
   (let ((index (org-roam--get-index-path)))
     (if (and index
              (file-exists-p index))
@@ -1430,7 +1401,6 @@ command will offer you to create one."
 
 Return added alias."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
   (let ((alias (read-string "Alias: " )))
     (when (string-empty-p alias)
       (user-error "Alias can't be empty"))
@@ -1442,7 +1412,6 @@ Return added alias."
 (defun org-roam-alias-delete ()
   "Delete an alias from Org-roam file."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
   (if-let ((aliases (org-roam--extract-titles-alias)))
       (let ((alias (completing-read "Alias: " aliases nil 'require-match)))
         ;; TODO implement
@@ -1454,34 +1423,16 @@ Return added alias."
 
 Return added tag."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
-  ;; TODO implement this
+    ;; TODO implement this
   )
 
 (defun org-roam-tag-delete ()
   "Delete a tag from Org-roam file."
   (interactive)
-  (unless org-roam-mode (org-roam-mode))
-  ;; TODO implement this
+    ;; TODO implement this
   )
 
 ;;;###autoload
-(defun org-roam-switch-to-buffer ()
-  "Switch to an existing Org-roam buffer."
-  (interactive)
-  (let* ((roam-buffers (org-roam--get-roam-buffers))
-         (names-and-buffers (mapcar (lambda (buffer)
-                                      (cons (or (org-roam-db--get-title
-                                                 (buffer-file-name buffer))
-                                                (buffer-name buffer))
-                                            buffer))
-                                    roam-buffers)))
-    (unless roam-buffers
-      (user-error "No roam buffers"))
-    (when-let ((name (org-roam-completion--completing-read "Buffer: " names-and-buffers
-                                                           :require-match t)))
-      (switch-to-buffer (cdr (assoc name names-and-buffers))))))
-
 (defun org-roam--execute-file-row-col (s)
   "Move to row:col if S match the row:col syntax. To be used with `org-execute-file-search-functions'."
   (when (string-match (rx (group (1+ digit))
