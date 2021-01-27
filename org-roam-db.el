@@ -191,15 +191,8 @@ the current `org-roam-directory'."
     (org-roam-db--close conn)))
 
 ;;;; Database API
-;;;;; Initialization
-(defun org-roam-db--initialized-p ()
-  "Whether the Org-roam cache has been initialized."
-  (and (file-exists-p org-roam-db-location)
-       (> (caar (org-roam-db-query [:select (funcall count) :from titles]))
-          0)))
-
 ;;;;; Clearing
-(defun org-roam-db-clear ()
+(defun org-roam-db-clear-all ()
   "Clears all entries in the Org-roam cache."
   (interactive)
   (when (file-exists-p org-roam-db-location)
@@ -318,13 +311,6 @@ If UPDATE-P is non-nil, first remove the file in the database."
        links))))
 
 ;;;;; Fetching
-(defun org-roam-db-has-file-p (file)
-  "Return t if FILE is in the database, nil otherwise."
-  (> (caar (org-roam-db-query [:select (funcall count) :from files
-                              :where (= file $s1)]
-                              file))
-     0))
-
 (defun org-roam-db--get-current-files ()
   "Return a hash-table of file to the hash of its file contents."
   (let ((current-files (org-roam-db-query [:select [file hash] :from files]))

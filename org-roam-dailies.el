@@ -43,7 +43,6 @@
 (defvar org-roam-mode)
 (defvar org-roam-directory)
 (declare-function org-roam--org-file-p        "org-roam")
-(declare-function org-roam--find-file         "org-roam")
 (declare-function org-roam-mode               "org-roam")
 
 ;;;; Customizable variables
@@ -126,7 +125,7 @@ Template string   :\n%v")
 (defun org-roam-dailies-find-directory ()
   "Find and open `org-roam-dailies-directory'."
   (interactive)
-  (org-roam--find-file (org-roam-dailies-directory--get-absolute-path)))
+  (find-file (org-roam-dailies-directory--get-absolute-path)))
 
 (defun org-roam-dailies--daily-note-p (&optional file)
   "Return t if FILE is an Org-roam daily-note, nil otherwise.

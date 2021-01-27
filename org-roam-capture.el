@@ -46,7 +46,6 @@
 
 (declare-function  org-roam--get-title-path-completions "org-roam")
 (declare-function  org-roam--get-ref-path-completions   "org-roam")
-(declare-function  org-roam--find-file                  "org-roam")
 (declare-function  org-roam--split-ref                 "org-roam")
 (declare-function  org-roam-mode                        "org-roam")
 (declare-function  org-roam-completion--completing-read "org-roam-completion")
@@ -327,7 +326,7 @@ the capture)."
       (pcase finalize
         ('find-file
          (when-let ((file-path (org-roam-capture--get :file-path)))
-           (org-roam--find-file file-path)
+           (find-file file-path)
            (run-hooks 'org-roam-capture-after-find-file-hook)))
         ('insert-link
          (when-let* ((mkr (org-roam-capture--get :insert-at))

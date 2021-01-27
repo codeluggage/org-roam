@@ -108,12 +108,6 @@ ensure that."
           (const :tag "Include everything" nil))
   :group 'org-roam)
 
-(defcustom org-roam-find-file-function nil
-  "Function called when visiting files in Org-roam commands.
-If nil, `find-file' is used."
-  :type 'function
-  :group 'org-roam)
-
 (defcustom org-roam-include-type-in-ref-path-completions nil
   "When t, include the type in ref-path completions.
 Note that this only affects interactive calls.
@@ -854,10 +848,6 @@ FILTER can either be a string or a function:
                 (v (list :path file-path :type type :ref ref)))
             (push (cons k v) completions)))))))
 
-(defun org-roam--find-file (file)
-  "Open FILE using `org-roam-find-file-function' or `find-file'."
-  (funcall (or org-roam-find-file-function #'find-file) file))
-
 (defun org-roam--find-ref (ref)
   "Find and open and Org-roam file from REF if it exists.
 REF should be the value of '#+roam_key:' without any
@@ -865,7 +855,7 @@ type-information (e.g. 'cite:').
 Return nil if the file does not exist."
   (when-let* ((completions (org-roam--get-ref-path-completions))
               (file (plist-get (cdr (assoc ref completions)) :path)))
-    (org-roam--find-file file)))
+    (find-file file)))
 
 (defun org-roam--get-roam-buffers ()
   "Return a list of buffers that are Org-roam files."
@@ -1302,7 +1292,7 @@ If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
 (defun org-roam-find-directory ()
   "Find and open `org-roam-directory'."
   (interactive)
-  (org-roam--find-file org-roam-directory))
+  (find-file org-roam-directory))
 
 ;;;###autoload
 (defun org-roam-find-ref (arg &optional filter)
@@ -1324,7 +1314,7 @@ included as a candidate."
                                                     :require-match t))
          (file (-> (cdr (assoc ref completions))
                    (plist-get :path))))
-    (org-roam--find-file file)))
+    (find-file file)))
 
 ;;;###autoload
 (defun org-roam-random-note ()
@@ -1430,7 +1420,7 @@ command will offer you to create one."
   (let ((index (org-roam--get-index-path)))
     (if (and index
              (file-exists-p index))
-        (org-roam--find-file index)
+        (find-file index)
       (when (y-or-n-p "Index file does not exist.  Would you like to create it? ")
         (org-roam-find-file "Index")))))
 

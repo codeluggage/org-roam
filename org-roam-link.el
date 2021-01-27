@@ -43,7 +43,6 @@
 
 (defvar org-roam-completion-ignore-case)
 (defvar org-roam-directory)
-(declare-function  org-roam--find-file                  "org-roam")
 (declare-function  org-roam-find-file                   "org-roam")
 (declare-function org-roam-format-link                  "org-roam")
 
@@ -66,7 +65,7 @@ the link."
     (pcase link-type
       ("file"
        (if loc
-           (org-roam--find-file loc)
+           (find-file loc)
          (org-roam-find-file desc nil nil t)))
       ("id"
        (org-goto-marker-or-bmk mkr)))))
