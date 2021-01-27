@@ -144,6 +144,8 @@ SQL can be either the emacsql vector representation, or a string."
       (pos :not-null)
       todo
       priority
+      (scheduled text)
+      (deadline text)
       tags
       title
       ref])
@@ -232,12 +234,22 @@ If UPDATE-P is non-nil, first remove the file in the database."
       :values $v1]
      (list (vector file hash atime mtime)))))
 
+(defun org-roam-db-get-scheduled-time ()
+  "Return the scheduled time at point in ISO8601 format."
+  (when-let ((time (org-get-scheduled-time (point))))
+    (org-format-time-string "%FT%T%z" time)))
+
+(defun org-roam-db-get-deadline-time ()
+  "Return the deadline time at point in ISO8601 format."
+  (when-let ((time (org-get-deadline-time (point))))
+    (org-format-time-string "%FT%T%z" time)))
+
 (defun org-roam-db-insert-nodes (&optional update-p)
   (let ((file (or org-roam-file-name
                   (buffer-file-name (buffer-base-buffer))))
         heading-components
         nodes
-        id level pos todo priority tags title ref)
+        id level pos todo priority scheduled deadline tags title ref)
     (when update-p
       (org-roam-db-query [:delete :from nodes
                           :where (= file $s1)]
@@ -251,10 +263,12 @@ If UPDATE-P is non-nil, first remove the file in the database."
               pos (point)
               todo nil
               priority nil
+              scheduled nil
+              deadline nil
               level (org-outline-level)
-              ;; TODO handle ref
-              ref nil)
-        (push (vector id file level pos todo priority tags title ref) nodes))
+              ref (org-entry-get (point) "ROAM_REF"))
+        (push (vector id file level pos todo priority
+                      scheduled deadline tags title ref) nodes))
       ;; Then we loop over all headlines
       (org-map-entries
        (lambda ()
@@ -266,9 +280,12 @@ If UPDATE-P is non-nil, first remove the file in the database."
               todo (nth 2 heading-components)
               priority (nth 3 heading-components)
               level (nth 1 heading-components)
-              ;; TODO handle ref
-              ref nil)
-           (push (vector id file level pos todo priority tags title ref) nodes)))))
+              scheduled (org-roam-db-get-scheduled-time)
+              deadline (org-roam-db-get-deadline-time)
+              ref (org-entry-get (point) "ROAM_REF"))
+           (push (vector id file level pos todo
+                         priority scheduled deadline
+                         tags title ref) nodes)))))
     (when nodes
       (org-roam-db-query
        [:insert :into nodes
