@@ -286,12 +286,20 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (scheduled nil)
           (deadline nil)
           (level 0)
-          (aliases (org-entry-get (point) "ROAM_ALIASES")))
+          (aliases (org-entry-get (point) "ROAM_ALIASES"))
+          (tags (org-entry-get (point) "ROAM_TAGS")))
       (org-roam-db-query
        [:insert :into nodes
         :values $v1]
        (vector id file level pos todo priority
                scheduled deadline title))
+      (when tags
+        (org-roam-db-query
+         [:insert :into tags
+          :values $v1]
+         (mapcar (lambda (tag)
+                   (vector file id tag))
+                 (split-string-and-unquote tags))))
       (when aliases
         (org-roam-db-query
          [:insert :into aliases
@@ -327,7 +335,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
                         :values $v1]
                        (mapcar (lambda (alias)
                                  (vector file node-id alias))
-                               (split-string-and-unquote aliases))))
+                               (split-string-and-unquote aliases)))))
 
 (defun org-roam-db-insert-tags ()
   "Insert tags for node at point into Org-roam cache."
@@ -496,7 +504,6 @@ If the file exists, update the cache with information."
     (message "Aliases: %s\nTags: %s"
              (string-join (mapcar #'car aliases) ", ")
              (string-join (mapcar #'car tags) ", "))))
-)
 
 (provide 'org-roam-db)
 

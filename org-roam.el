@@ -750,18 +750,36 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
                                      'face 'org-roam-tag))))
     ('omit str)))
 
+(defun org-roam--tags-table ()
+  "Return a hash table of node ID to list of tags."
+  (let ((ht (make-hash-table :test #'equal)))
+    (pcase-dolist (`(,node-id ,tag) (org-roam-db-query [:select [node-id tag] :from tags]))
+      (puthash node-id (cons tag (gethash node-id ht)) ht))
+    ht))
 
-(defun org-roam--get-title-path-completions ()
-  "Return an alist for completion.
-The car is the displayed title for completion, and the cdr is a
-plist containing the path and title for the file."
-  ;; TODO: Handle aliases and tags
-  (let* ((rows (org-roam-db-query [:select [file id title pos] :from nodes]))
+(defun org-roam--node-completions ()
+  "Return an alist for node completion.
+The car is the displayed title or alias for the node, and the cdr
+is a plist containing the properties of the node."
+  (let* ((rows (org-roam-db-query [:select [nodes:file nodes:id nodes:title nodes:pos]
+                                   :from nodes]))
+         (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
+                                         :left :join nodes :on (= aliases:node_id nodes:id)]))
+         (tag-table (org-roam--tags-table))
          completions)
-    (dolist (row rows completions)
+    (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
+        (when-let ((tags (gethash id tag-table)))
+          (setq title (org-roam--add-tag-string title tags)))
         (push (cons title
-                    (list :path file-path :title title :point pos :id id))
+                    (list :path file-path :title title :point pos :id id :tags tags))
+              completions)))
+    (dolist (row alias-rows completions)
+      (pcase-let ((`(,file-path ,id ,alias ,pos) row))
+        (when-let ((tags (gethash id tag-table)))
+          (setq alias (org-roam--add-tag-string alias tags)))
+        (push (cons alias
+                    (list :path file-path :title alias :point pos :id id :tags tags))
               completions)))))
 
 (defun org-roam--get-index-path ()
@@ -1235,17 +1253,17 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
     (insert (format "- Org-roam: %s" (org-roam-version)))))
 
 ;;;###autoload
-(defun org-roam-find-file (&optional initial-prompt no-confirm)
-  "Find and open an Org-roam node.
-INITIAL-PROMPT is the initial title prompt.
-COMPLETIONS is a list of completions to be used instead of
-`org-roam--get-title-path-completions`.
+(defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)
+  "Find and open an Org-roam node by its title or alias.
+INITIAL-PROMPT is the initial prompt.
 FILTER-FN is the name of a function to apply on the candidates
-which takes as its argument an alist of path-completions.  See
-`org-roam--get-title-path-completions' for details.
+which takes as its argument an alist of path-completions.
 If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
   (interactive)
-  (let* ((completions (org-roam--get-title-path-completions))
+  (let* ((completions (org-roam--node-completions))
+         (completions (if filter-fn
+                          (funcall filter-fn completions)
+                        completions))
          (title-with-tags (if no-confirm
                               initial-prompt
                             (org-roam-completion--completing-read "File: " completions
@@ -1302,11 +1320,10 @@ Return selected file if it exists.
 If LOWERCASE is non-nil, downcase the link description.
 LINK-TYPE is the type of link to be created. It defaults to \"file\".
 COMPLETIONS is a list of completions to be used instead of
-`org-roam--get-title-path-completions`.
+`org-roam--node-completions'.
 FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions.
-If DESCRIPTION is provided, use this as the link label.  See
-`org-roam--get-title-path-completions' for details."
+If DESCRIPTION is provided, use this as the link label."
   (interactive "P")
   ;; Deactivate the mark on quit since `atomic-change-group' prevents it
   (unwind-protect
@@ -1319,7 +1336,7 @@ If DESCRIPTION is provided, use this as the link label.  See
                     (setq end (set-marker (make-marker) (region-end)))
                     (setq region-text (org-link-display-format (buffer-substring-no-properties beg end)))))
                (completions (--> (or completions
-                                     (org-roam--get-title-path-completions))
+                                     (org-roam--node-completions))
                               (if filter-fn
                                   (funcall filter-fn it)
                                 it)))

@@ -43,7 +43,6 @@
 (defvar org-roam-title-to-slug-function)
 (defvar org-roam-file-extensions)
 
-(declare-function  org-roam--get-title-path-completions "org-roam")
 (declare-function  org-roam--get-ref-path-completions   "org-roam")
 (declare-function  org-roam--split-ref                 "org-roam")
 (declare-function  org-roam-completion--completing-read "org-roam-completion")
@@ -615,7 +614,7 @@ GOTO and KEYS argument have the same functionality as
 This uses the templates defined at `org-roam-capture-templates'.
 Arguments GOTO and KEYS see `org-capture'."
   (interactive "P")
-  (let* ((completions (org-roam--get-title-path-completions))
+  (let* ((completions (org-roam--node-completions))
          (title-with-keys (org-roam-completion--completing-read "File: "
                                                                 completions))
          (res (cdr (assoc title-with-keys completions)))
