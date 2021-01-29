@@ -766,7 +766,7 @@ is a plist containing the properties of the node."
          (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
                                          :left :join nodes :on (= aliases:node_id nodes:id)]))
          (tag-table (org-roam--tags-table))
-         completions)
+         completions tags)
     (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
         (when-let ((tags (gethash id tag-table)))
