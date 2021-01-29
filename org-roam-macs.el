@@ -66,7 +66,7 @@ Kills the buffer if KEEP-BUF-P is nil, and FILE is not yet visited."
                      (find-file-noselect ,file nil t)))) ; Else, visit FILE and return buffer
           res)
      (with-current-buffer buf
-       (unless (bound-and-true-p org-mode)
+       (unless (equal major-mode 'org-mode)
          (delay-mode-hooks (org-mode)))
        (setq res (progn ,@body))
        (unless (and new-buf (not ,keep-buf-p))
