@@ -68,23 +68,7 @@
                  ;; pass a filename.
                  (funcall fn)))))
     ;; Enable "cite:" link parsing
-    (org-link-set-parameters "cite")
-    (it "extracts web keys"
-      (expect (test #'org-roam--extract-ref
-                    "web_ref.org")
-              :to-equal
-              '("website" . "//google.com/")))
-    (it "extracts cite keys"
-      (expect (test #'org-roam--extract-ref
-                    "cite_ref.org")
-              :to-equal
-              '("cite" . "mitsuha2007")))
-    (it "extracts all keys"
-      (expect (test #'org-roam--extract-refs
-                    "multiple-refs.org")
-              :to-have-same-items-as
-              '(("cite" . "orgroam2020")
-                ("website" . "//www.orgroam.com/"))))))
+    (org-link-set-parameters "cite")))
 
 (describe "Title extraction"
   :var (org-roam-title-sources)
