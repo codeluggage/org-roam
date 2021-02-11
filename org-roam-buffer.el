@@ -144,7 +144,7 @@ instead.
            (backlinks (seq-group-by #'car backlinks))
            source values)
       (magit-insert-section (backlinks-section)
-        (magit-insert-heading "Backlinks")
+        (magit-insert-heading "Backlinks:")
         (dolist (backlink backlinks)
           (setq source (car backlink)
                 values (cdr backlink))
@@ -212,24 +212,26 @@ instead.
                                org-roam-directory))
            (results (split-string (shell-command-to-string rg-command) "\n"))
            file row col match)
-      (dolist (line results)
-        (save-match-data
-          (when (string-match org-roam-unlinked-reference-result-re line)
-            (setq file (match-string 1 line)
-                  row (match-string 2 line)
-                  col (match-string 3 line)
-                  match (match-string 4 line))
-            (when (and match
-                       (member (downcase match) (mapcar #'downcase titles)))
-              (magit-insert-section (unlinked-reference)
-                (insert (propertize (format
-                                     "%-8s"
-                                     (format "%s:%s" row col))
-                                    'font-lock-face 'org-roam-rowcol)
-                        " "
-                        " "
-                        file
-                        "\n")))))))))
+      (magit-insert-section (unlinked-references)
+        (magit-insert-heading "Unlinked References:")
+        (dolist (line results)
+          (save-match-data
+            (when (string-match org-roam-unlinked-reference-result-re line)
+              (setq file (match-string 1 line)
+                    row (match-string 2 line)
+                    col (match-string 3 line)
+                    match (match-string 4 line))
+              (when (and match
+                         (member (downcase match) (mapcar #'downcase titles)))
+                (magit-insert-section (unlinked-reference)
+                  (insert (propertize (format
+                                       "%-8s"
+                                       (format "%s:%s" row col))
+                                      'font-lock-face 'org-roam-rowcol)
+                          " "
+                          " "
+                          file
+                          "\n"))))))))))
 
 ;; Current Test Function
 (defun org-roam-buffer ()
@@ -246,6 +248,7 @@ instead.
          (erase-buffer)
          (org-roam-buffer-mode)
          (magit-insert-section (demo-buffer)
+           (magit-insert-heading)
            (dolist (widget org-roam-widgets)
              (funcall widget :node node)))))
     (switch-to-buffer-other-window buffer)))
