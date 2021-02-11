@@ -42,11 +42,69 @@
   "Face for Org-roam titles."
   :group 'org-roam-faces)
 
+;; Buffer mode
+(define-derived-mode org-roam-buffer-mode magit-section-mode "Org-roam"
+  "Major mode for Org-roam's buffer."
+  :group 'org-roam
+  (face-remap-add-relative 'header-line 'magit-header-line))
+
+(defun org-roam-visit-thing ()
+  "This is a placeholder command.
+Where applicable, section-specific keymaps bind another command
+which visits the thing at point."
+  (interactive)
+  (user-error "There is no thing at point that could be visited"))
+
+(defvar org-roam-buffer-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map magit-section-mode-map)
+    (define-key map [C-return]  'org-roam-visit-thing)
+    (define-key map (kbd "C-m") 'org-roam-visit-thing)
+    map)
+  "Parent keymap for all keymaps of modes derived from `org-roam-buffer-mode'.")
+
 ;;; Widget Classes
-(defclass org-roam-file-section (magit-section)
-  ((keymap :initform org-roam-file-section-map)
-   (node :initform nil)
-   (pos :initform nil)))
+(defclass org-roam-node-section (magit-section)
+  ((keymap :initform org-roam-node-section-map)
+   (node :initform nil)))
+
+(defun org-roam-buffer-node-at-point (&optional assert)
+  "Returns the node at point."
+  (if-let ((node (magit-section-case
+                   (org-roam-node-section (oref it node)))))
+      node
+    (when assert
+      (user-error "No node at point"))))
+
+(defun org-roam-buffer-visit-node (node &optional other-window)
+  "From the buffer, visit the node.
+
+Display the buffer in the selected window.  With a prefix
+argument OTHER-WINDOW display the buffer in another window
+instead.
+"
+  (interactive (list (org-roam-buffer-node-at-point t) current-prefix-arg))
+  (let ((buf (org-roam--find-node node)))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+(defun org-roam-buffer--preview (file point)
+  "Get preview content for FILE at POINT."
+  (org-roam--with-temp-buffer file
+    (goto-char point)
+    (let ((elem (org-element-at-point)))
+      (or (org-element-property :raw-value elem)
+          (when-let ((begin (org-element-property :begin elem))
+                     (end (org-element-property :end elem)))
+            (string-trim (buffer-substring-no-properties begin end)))))))
+
+(defvar org-roam-node-section-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map org-roam-buffer-mode-map)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-buffer-visit-node)
+    map)
+  "Keymap for Org-roam file sections.")
 
 ;;;; Unlinked References Widget
 (defface org-roam-rowcol
@@ -64,14 +122,6 @@
       ":"
       (group (zero-or-more anything)))
   "Regex for the return result of a ripgrep query.")
-
-(defvar org-roam-widget-unlinked-references
-  (org-roam-widget :name 'unlinked-refs
-                   :header "Unlinked References:"
-                   :items #'org-roam-widget-get-unlinked-references
-                   :render #'org-roam-widget-render-unlinked-references
-                   :show-p #'org-roam-widget-show-unlinked-references-p)
-  "Widget for unlinked references.")
 
 ;;;
 (defvar org-roam-widgets
@@ -93,20 +143,23 @@
                        node))
            (backlinks (seq-group-by #'car backlinks))
            source values)
-      (dolist (backlink backlinks)
-        (setq source (car backlink)
-              values (cdr backlink))
-        (magit-insert-section (backlinks-file)
+      (magit-insert-section (backlinks-section)
+        (magit-insert-heading "Backlinks")
+        (dolist (backlink backlinks)
+          (setq source (car backlink)
+                values (cdr backlink))
           (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
-            (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
-            (let ((outline (or (plist-get props :outline) '("Top"))))
-              (magit-insert-section (backlink-outline)
-                (magit-insert-heading (org-fontify-like-in-org-mode
-                                       (-> outline
-                                           (string-join " > "))))
-                (magit-insert-section (backlink-preview)
-                  (insert (org-fontify-like-in-org-mode
-                           (org-roam-buffer--preview source-file pos)) "\n"))))))))))
+            (magit-insert-section section (org-roam-node-section)
+              (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
+              (oset section node source)
+              (let ((outline (or (plist-get props :outline) '("Top"))))
+                (magit-insert-section (backlink-outline)
+                  (magit-insert-heading (org-fontify-like-in-org-mode
+                                         (-> outline
+                                             (string-join " > "))))
+                  (magit-insert-section (backlink-preview)
+                    (insert (org-fontify-like-in-org-mode
+                             (org-roam-buffer--preview source-file pos)) "\n")))))))))))
 
 (cl-defun org-roam-widget-reflinks (&key node)
   "Render ref links for NODE."
@@ -191,11 +244,11 @@
       (setq-local org-roam-buffer-node node)
        (let ((inhibit-read-only t))
          (erase-buffer)
-         (magit-section-mode)
+         (org-roam-buffer-mode)
          (magit-insert-section (demo-buffer)
            (dolist (widget org-roam-widgets)
              (funcall widget :node node)))))
-     (switch-to-buffer-other-window buffer)))
+    (switch-to-buffer-other-window buffer)))
 
 (provide 'org-roam-buffer)
 ;;; org-roam-buffer.el ends here

@@ -1223,6 +1223,20 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
     (insert (format "- Org: %s\n" (org-version nil 'full)))
     (insert (format "- Org-roam: %s" (org-roam-version)))))
 
+(defun org-roam--find-node (node)
+  "Navigates to the point for NODE, and returns the buffer."
+  (let ((res (org-roam-db-query [:select [file pos] :from nodes
+                                 :where (= id $s1)
+                                 :limit 1]
+                                node)))
+    (pcase res
+      (`((,file ,pos))
+       (let ((buf (find-file-noselect file)))
+         (with-current-buffer buf
+           (goto-char pos))
+         buf))
+      ((pred nilp) (user-error "No node with ID %s" node)))))
+
 ;;;###autoload
 (defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)
   "Find and open an Org-roam node by its title or alias.
