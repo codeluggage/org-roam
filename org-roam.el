@@ -551,60 +551,6 @@ Assume buffer is widened and point is on a headline."
           (cons heading (org-roam--get-outline-path-1))
         (list heading)))))
 
-(defun org-roam--extract-titles-title ()
-  "Return title from \"#+title\" of the current buffer."
-  (let* ((prop (org-roam--extract-global-props '("TITLE")))
-         (title (cdr (assoc "TITLE" prop))))
-    (when title
-      (list title))))
-
-(defun org-roam--extract-titles-alias ()
-  "Return the aliases from the current buffer.
-Reads from the \"roam_alias\" property."
-  (let* ((prop (org-roam--extract-global-props '("ROAM_ALIAS")))
-         (aliases (or (cdr (assoc "ROAM_ALIAS" prop))
-                      "")))
-    (condition-case nil
-        (split-string-and-unquote aliases)
-      (error
-       (progn
-         (lwarn '(org-roam) :error
-                "Failed to parse aliases for buffer: %s. Skipping"
-                (or org-roam-file-name
-                    (buffer-file-name)))
-         nil)))))
-
-(defun org-roam--extract-titles-headline ()
-  "Return the first headline of the current buffer."
-  (let ((headline (save-excursion
-                    (goto-char (point-min))
-                    ;; "What happens if a heading star was quoted
-                    ;; before the first heading?"
-                    ;; - `org-map-region' also does this
-                    ;; - Org already breaks badly when you do that;
-                    ;; precede the heading star with a ",".
-                    (re-search-forward org-outline-regexp-bol nil t)
-                    (org-entry-get nil "ITEM"))))
-    (when headline
-      (list headline))))
-
-(defun org-roam--extract-titles (&optional sources nested)
-  "Extract the titles from current buffer using SOURCES.
-If NESTED, return the first successful result from SOURCES."
-  (org-with-wide-buffer
-   (let (coll res)
-     (cl-dolist (source (or sources
-                            org-roam-title-sources))
-       (setq res (if (symbolp source)
-                     (funcall (intern (concat "org-roam--extract-titles-" (symbol-name source))))
-                   (org-roam--extract-titles source t)))
-       (when res
-         (if (not nested)
-             (setq coll (nconc coll res))
-           (setq coll res)
-           (cl-return))))
-     (-uniq coll))))
-
 (defun org-roam--collate-types (type)
   "Collate TYPE into a parent type.
 Packages like `org-ref' introduce many different link prefixes,
@@ -928,7 +874,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
   (when (org-roam--org-roam-file-p)
     (setq org-roam-last-window (get-buffer-window))
     (run-hooks 'org-roam-file-setup-hook) ; Run user hooks
-    (org-roam--setup-title-auto-update)
     (add-hook 'after-save-hook #'org-roam-db-update-file nil t)
     (dolist (fn org-roam-completion-functions)
       (add-hook 'completion-at-point-functions fn nil t))))
@@ -989,39 +934,6 @@ replaced links are made relative to the current buffer."
                   (concat type ":" (org-roam-link-get-path path)))
             (replace-match new-link nil t nil 1)))))))
 
-(defcustom org-roam-rename-file-on-title-change t
-  "If non-nil, alter the filename on title change.
-The new title is converted into a slug using
-`org-roam-title-to-slug-function', and compared with the current
-filename."
-  :group 'org-roam
-  :type 'boolean)
-
-(defcustom org-roam-title-change-hook '(org-roam--update-file-name-on-title-change
-                                        org-roam--update-links-on-title-change)
-  "Hook run after detecting a title change.
-Each hook is passed two arguments: the old title, and new title
-respectively."
-  :group 'org-roam
-  :type 'hook)
-
-(defvar-local org-roam-current-title nil
-  "The current title of the Org-roam file.")
-
-(defun org-roam--handle-title-change ()
-  "Detect a title change, and run `org-roam-title-change-hook'."
-  (let ((new-title (car (org-roam--extract-titles)))
-        (old-title org-roam-current-title))
-    (unless (or (eq old-title nil)
-                (string-equal old-title new-title))
-      (run-hook-with-args 'org-roam-title-change-hook old-title new-title))
-    (setq-local org-roam-current-title new-title)))
-
-(defun org-roam--setup-title-auto-update ()
-  "Setup automatic link description update on title change."
-  (setq-local org-roam-current-title (car (org-roam--extract-titles)))
-  (add-hook 'after-save-hook #'org-roam--handle-title-change nil t))
-
 (defun org-roam--update-links-on-title-change (old-title new-title)
   "Update the link description of other Org-roam files.
 Iterate over all Org-roam files that have link description of
@@ -1037,27 +949,6 @@ To be added to `org-roam-title-change-hook'."
     (dolist (file files-affected)
       (org-roam-with-file (car file) nil
         (org-roam--replace-link current-path current-path old-title new-title)))))
-
-(defun org-roam--update-file-name-on-title-change (old-title new-title)
-  "Update the file name on title change.
-The slug is computed from OLD-TITLE using
-`org-roam-title-to-slug-function'. If the slug is part of the
-current filename, the new slug is computed with NEW-TITLE, and
-that portion of the filename is renamed.
-
-To be added to `org-roam-title-change-hook'."
-  (when org-roam-rename-file-on-title-change
-    (let* ((old-slug (funcall org-roam-title-to-slug-function old-title))
-           (file (buffer-file-name (buffer-base-buffer)))
-           (file-name (file-name-nondirectory file)))
-      (when (string-match-p old-slug file-name)
-        (let* ((new-slug (funcall org-roam-title-to-slug-function new-title))
-               (new-file-name (replace-regexp-in-string old-slug new-slug file-name)))
-          (unless (string-equal file-name new-file-name)
-            (rename-file file-name new-file-name)
-            (set-visited-file-name new-file-name t t)
-            (org-roam-db-update-file)
-            (org-roam-message "File moved to %S" (abbreviate-file-name new-file-name))))))))
 
 (defun org-roam--rename-file-advice (old-file new-file-or-dir &rest _args)
   "Rename backlinks of OLD-FILE to refer to NEW-FILE-OR-DIR.
