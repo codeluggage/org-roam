@@ -605,71 +605,6 @@ If NESTED, return the first successful result from SOURCES."
            (cl-return))))
      (-uniq coll))))
 
-(defun org-roam--extract-tags-all-directories (file)
-  "Extract tags from using the directory path FILE.
-All sub-directories relative to `org-roam-directory' are used as tags."
-  (when-let ((dir-relative (file-name-directory
-                            (file-relative-name file (expand-file-name org-roam-directory)))))
-    (f-split dir-relative)))
-
-(defun org-roam--extract-tags-last-directory (file)
-  "Extract tags from using the directory path FILE.
-The final directory component is used as a tag."
-  (when-let ((dir-relative (file-name-directory
-                            (file-relative-name file (expand-file-name org-roam-directory)))))
-    (last (f-split dir-relative))))
-
-(defun org-roam--extract-tags-first-directory (file)
-  "Extract tags from path FILE.
-The first directory component after `org-roam-directory' is used as a
-tag."
-  (when-let ((dir-relative (file-name-directory
-                            (file-relative-name file (expand-file-name org-roam-directory)))))
-    (list (car (f-split dir-relative)))))
-
-(defun org-roam--extract-tags-prop (_file)
-  "Extract tags from the current buffer's \"#roam_tags\" global property."
-  (let* ((prop (or (cdr (assoc "ROAM_TAGS" (org-roam--extract-global-props '("ROAM_TAGS"))))
-                   "")))
-    (condition-case nil
-        (split-string-and-unquote prop)
-      (error
-       (progn
-         (lwarn '(org-roam) :error
-                "Failed to parse tags for buffer: %s. Skipping"
-                (or org-roam-file-name
-                    (buffer-file-name)))
-         nil)))))
-
-(defun org-roam--extract-tags-vanilla (_file)
-  "Extract vanilla `org-mode' tags.
-This includes all tags used in the buffer."
-  (-flatten (org-get-buffer-tags)))
-
-(defun org-roam--extract-tags (&optional file)
-  "Extract tags from the current buffer.
-If file-path FILE, use it to determine the directory tags.
-Tags are obtained via:
-
-1. Directory tags: Relative to `org-roam-directory': each folder
-   path is considered a tag.
-2. The key #+roam_tags."
-  (let* ((file (or file (buffer-file-name (buffer-base-buffer))))
-         (tags (-uniq
-                (mapcan (lambda (source)
-                          (funcall (intern (concat "org-roam--extract-tags-"
-                                                   (symbol-name source)))
-                                   file))
-                        org-roam-tag-sources))))
-    (pcase org-roam-tag-sort
-      ('nil tags)
-      ((pred booleanp) (cl-sort tags 'string-lessp :key 'downcase))
-      (`(,(pred symbolp) . ,_)
-       (apply #'cl-sort (push tags org-roam-tag-sort)))
-      (wrong-type (signal 'wrong-type-argument
-                          `((booleanp (list symbolp))
-                            ,wrong-type))))))
-
 (defun org-roam--collate-types (type)
   "Collate TYPE into a parent type.
 Packages like `org-ref' introduce many different link prefixes,
@@ -767,25 +702,6 @@ whose title is 'Index'."
                                       ,wrong-type))))))
     (expand-file-name path org-roam-directory)))
 
-;;;; dealing with file-wide properties
-(defun org-roam--set-global-prop (name value)
-  "Set a file property called NAME to VALUE.
-
-If the property is already set, it's value is replaced."
-  (org-with-point-at 1
-    (let ((case-fold-search t))
-      (if (re-search-forward (concat "^#\\+" name ":\\(.*\\)") (point-max) t)
-          (replace-match (concat " " value) 'fixedcase nil nil 1)
-        (while (and (not (eobp))
-                    (looking-at "^[#:]"))
-          (if (save-excursion (end-of-line) (eobp))
-              (progn
-                (end-of-line)
-                (insert "\n"))
-            (forward-line)
-            (beginning-of-line)))
-        (insert "#+" name ": " value "\n")))))
-
 ;;;; org-roam-find-ref
 (defun org-roam--get-ref-path-completions (&optional arg filter)
   "Return an alist of refs to absolute path of Org-roam files.
@@ -882,16 +798,6 @@ Return nil if the file does not exist."
                                (_ dest))))))
       (string= current-file backlink-dest))))
 
-(defun org-roam--get-backlinks (node)
-  "Return the backlinks for NODE."
-  (unless (listp targets)
-    (setq targets (list targets)))
-  (let ((conditions (--> targets
-                      (mapcar (lambda (i) (list '= 'dest i)) it)
-                      (org-roam--list-interleave it :or))))
-    (org-roam-db-query `[:select [source dest properties] :from links
-                         :where ,@conditions
-                         :order-by (asc source)])))
 
 ;;; Completion at point
 (defcustom org-roam-completion-everywhere nil
@@ -967,7 +873,7 @@ This is active when `org-roam-completion-everywhere' is non-nil."
 
 ;;; Org-roam-mode
 ;;;; Function Faces
-;; These faces are usnnnnnnnned by `org-link-set-parameters', which take one argument,
+;; These faces are used by `org-link-set-parameters', which take one argument,
 ;; which is the path.
 (defcustom org-roam-link-use-custom-faces t
   "Define where to apply custom faces to Org-roam links.
@@ -996,7 +902,6 @@ Otherwise, do not apply custom faces to Org-roam links."
     (lwarn '(org-roam) :error "Cannot find executable 'sqlite3'. \
 Ensure it is installed and can be found within `exec-path'. \
 M-x info for more information at Org-roam > Installation > Post-Installation Tasks."))
-  (add-to-list 'org-execute-file-search-functions 'org-roam--execute-file-row-col)
   (add-hook 'find-file-hook #'org-roam--find-file-hook-function)
   (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
   (advice-add 'rename-file :after #'org-roam--rename-file-advice)
@@ -1007,8 +912,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
 (defun org-roam-teardown ()
   "Teardown Org-roam."
   (interactive)
-  (setq org-execute-file-search-functions
-        (delete 'org-roam--execute-file-row-col org-execute-file-search-functions))
   (remove-hook 'find-file-hook #'org-roam--find-file-hook-function)
   (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
   (advice-remove 'rename-file #'org-roam--rename-file-advice)
@@ -1203,9 +1106,6 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
 
 ;;; Interactive Commands
 ;;;###autoload
-(defalias 'org-roam 'org-roam-buffer-toggle-display)
-
-;;;###autoload
 (defun org-roam-diagnostics ()
   "Collect and print info for `org-roam' issues."
   (interactive)
@@ -1370,134 +1270,6 @@ command will offer you to create one."
         (find-file index)
       (when (y-or-n-p "Index file does not exist.  Would you like to create it? ")
         (org-roam-find-file "Index")))))
-
-;;;###autoload
-(defun org-roam-alias-add ()
-  "Add an alias to Org-roam file.
-
-Return added alias."
-  (interactive)
-  (let ((alias (read-string "Alias: " )))
-    (when (string-empty-p alias)
-      (user-error "Alias can't be empty"))
-    ;; TODO implement
-    (org-roam-db-update-file)
-    alias))
-
-;;;###autoload
-(defun org-roam-alias-delete ()
-  "Delete an alias from Org-roam file."
-  (interactive)
-  (if-let ((aliases (org-roam--extract-titles-alias)))
-      (let ((alias (completing-read "Alias: " aliases nil 'require-match)))
-        ;; TODO implement
-        (org-roam-db-update-file))
-    (user-error "No aliases to delete")))
-
-(defun org-roam-tag-add ()
-  "Add a tag to Org-roam file.
-
-Return added tag."
-  (interactive)
-    ;; TODO implement this
-  )
-
-(defun org-roam-tag-delete ()
-  "Delete a tag from Org-roam file."
-  (interactive)
-    ;; TODO implement this
-  )
-
-;;;###autoload
-(defun org-roam--execute-file-row-col (s)
-  "Move to row:col if S match the row:col syntax. To be used with `org-execute-file-search-functions'."
-  (when (string-match (rx (group (1+ digit))
-                          ":"
-                          (group (1+ digit))) s)
-    (let ((row (string-to-number (match-string 1 s)))
-          (col (string-to-number (match-string 2 s))))
-      (org-goto-line row)
-      (move-to-column (- col 1))
-      t)))
-
-;;###autoload
-(defun org-roam-unlinked-references ()
-  "Check for unlinked references in the current buffer.
-
-The check here is naive: it uses a regex that detects for
-strict (case-insensitive) occurrences of possible titles (see
-`org-roam--extract-titles'), and shows them in a buffer. This
-means that the results can be noisy, and may not truly indicate
-an unlinked reference.
-
-Users are encouraged to think hard about whether items should be
-linked, lest the network graph get too crowded.
-
-Requires a version of Ripgrep with PCRE2 support installed, with
-the executable 'rg' in variable `exec-path'."
-  (interactive)
-  (unless (org-roam--org-roam-file-p)
-    (user-error "Not in org-roam file"))
-  (if (not (executable-find "rg"))
-      (error (concat "Cannot find the ripgrep executable \"rg\". "
-                     "Check that it is installed and available on `exec-path'"))
-    (when (string-match "PCRE2 is not available" (shell-command-to-string "rg --pcre2-version"))
-      (error "\"rg\" must be compiled with PCRE2 support"))
-    (let* ((titles (org-roam--extract-titles))
-           (rg-command (concat "rg -o --vimgrep -P -i "
-                               (string-join (mapcar (lambda (glob) (concat "-g " glob))
-                                                    (org-roam--list-files-search-globs org-roam-file-extensions)) " ")
-                               (format " '\\[([^[]]++|(?R))*\\]%s' "
-                                       (mapconcat (lambda (title)
-                                                    (format "|(\\b%s\\b)" (shell-quote-argument title)))
-                                                  titles ""))
-                               org-roam-directory))
-           (file-loc (buffer-file-name))
-           (buf (get-buffer-create "*org-roam unlinked references*"))
-           (results (split-string (shell-command-to-string rg-command) "\n"))
-           (result-regex (rx (group (one-or-more anything))
-                             ":"
-                             (group (one-or-more digit))
-                             ":"
-                             (group (one-or-more digit))
-                             ":"
-                             (group (zero-or-more anything)))))
-      (pop-to-buffer buf)
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (org-mode)
-        (insert (propertize (car titles) 'font-lock-face 'org-document-title) "\n\n"
-                "* Unlinked References\n")
-        (dolist (line results)
-          (save-match-data
-            (when (string-match result-regex line)
-              (let ((file (match-string 1 line))
-                    (row (match-string 2 line))
-                    (col (match-string 3 line))
-                    (match (match-string 4 line)))
-                (when (and match
-                           (member (downcase match) (mapcar #'downcase titles))
-                           (not (f-equal-p (expand-file-name file org-roam-directory)
-                                           file-loc)))
-                  (let ((rowcol (concat row ":" col)))
-                    (insert "- "
-                            (org-link-make-string (concat "file:" file "::" rowcol)
-                                                  (format "[%s] %s" rowcol (or (org-roam-db--get-title file)
-                                                                               file))))
-                    (when (executable-find "sed") ; insert line contents when sed is available
-                      (insert " :: "
-                              (shell-command-to-string
-                               (concat "sed -n "
-                                       row
-                                       "p "
-                                       "\""
-                                       file
-                                       "\""))))
-                    (insert "\n")))))))
-        (read-only-mode +1)
-        (dolist (title titles)
-          (highlight-phrase (downcase title) 'bold-italic))
-        (goto-char (point-min))))))
 
 ;;;###autoload
 (defun org-roam-version (&optional message)

@@ -33,9 +33,6 @@
 (require 'eieio)
 (require 'magit-section)
 
-(defvar-local org-roam-buffer-node nil
-  "Node ID that is currently displayed in the buffer.")
-
 ;; Faces
 (defface org-roam-title
   '((t :weight bold))
@@ -253,7 +250,7 @@ instead.
                                                   titles ""))
                                org-roam-directory))
            (results (split-string (shell-command-to-string rg-command) "\n"))
-           file row col match)
+           f row col match)
       (magit-insert-section (unlinked-references)
         (magit-insert-heading "Unlinked References:")
         (dolist (line results)
@@ -264,7 +261,7 @@ instead.
                     col (string-to-number (match-string 3 line))
                     match (match-string 4 line))
               (when (and match
-                         (not (string-equal file f))
+                         (not (f-equal-p file f))
                          (member (downcase match) (mapcar #'downcase titles)))
                 (magit-insert-section section (org-roam-grep-section)
                   (oset section file f)
@@ -274,7 +271,7 @@ instead.
                                               (truncate-string-to-width (file-name-base f) 15 nil nil "...")
                                               row col) 'font-lock-face 'org-roam-dim)
                           " "
-                          (org-fontify-like-in-org-mode (org-roam-buffer-line-preview f (string-to-number row)))
+                          (org-fontify-like-in-org-mode (org-roam-buffer-line-preview f row))
                           "\n"))))))))))
 
 (defun org-roam-buffer-line-preview (file row)
@@ -299,7 +296,6 @@ instead.
                          (buffer-file-name))))
         (node (org-roam-current-node)))
     (with-current-buffer buffer
-      (setq-local org-roam-buffer-node node)
        (let ((inhibit-read-only t))
          (erase-buffer)
          (org-roam-buffer-mode)

@@ -50,7 +50,6 @@
 (declare-function org-roam--extract-refs                   "org-roam")
 (declare-function org-roam--extract-tags                   "org-roam")
 (declare-function org-roam--list-all-files                 "org-roam")
-(declare-function org-roam--path-to-slug                   "org-roam")
 (declare-function org-roam--file-name-extension            "org-roam")
 (declare-function org-roam-current-node                    "org-roam")
 
