@@ -174,20 +174,23 @@ instead.
                       node))
            (reflinks (seq-group-by #'car reflinks))
            source values)
-      (dolist (reflink reflinks)
-        (setq source (car reflink)
-              values (cdr reflink))
-        (magit-insert-section (backlinks-file)
-          (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
-            (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
-            (let ((outline (or (plist-get props :outline) '("Top"))))
-              (magit-insert-section (backlink-outline)
-                (magit-insert-heading (org-fontify-like-in-org-mode
-                                       (-> outline
-                                           (string-join " > "))))
-                (magit-insert-section (backlink-preview)
-                  (insert (org-fontify-like-in-org-mode
-                           (org-roam-buffer--preview source-file pos)) "\n"))))))))))
+      (magit-insert-section section (org-roam-reflinks-section)
+        (magit-insert-heading "Reflinks:")
+        (dolist (reflink reflinks)
+          (setq source (car reflink)
+                values (cdr reflink))
+          (magit-insert-section section (org-roam-node-section)
+            (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
+              (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
+              (let ((outline (or (plist-get props :outline) '("Top"))))
+                (oset section node source)
+                (magit-insert-section (backlink-outline)
+                  (magit-insert-heading (org-fontify-like-in-org-mode
+                                         (-> outline
+                                             (string-join " > "))))
+                  (magit-insert-section (backlink-preview)
+                    (insert (org-fontify-like-in-org-mode
+                             (org-roam-buffer--preview source-file pos)) "\n")))))))))))
 
 (cl-defun org-roam-widget-unlinked-references (&key node)
   "Render unlinked references for NODE."
