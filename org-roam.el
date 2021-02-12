@@ -1018,7 +1018,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
   ;; Disable local hooks for all org-roam buffers
   (dolist (buf (org-roam--get-roam-buffers))
     (with-current-buffer buf
-      (remove-hook 'before-save-hook #'org-roam-link--replace-link-on-save t)
       (remove-hook 'after-save-hook #'org-roam-db-update-file t))))
 
 (defun org-roam--find-file-hook-function ()
@@ -1027,7 +1026,6 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (setq org-roam-last-window (get-buffer-window))
     (run-hooks 'org-roam-file-setup-hook) ; Run user hooks
     (org-roam--setup-title-auto-update)
-    (add-hook 'before-save-hook #'org-roam-link--replace-link-on-save nil t)
     (add-hook 'after-save-hook #'org-roam-db-update-file nil t)
     (dolist (fn org-roam-completion-functions)
       (add-hook 'completion-at-point-functions fn nil t))))
