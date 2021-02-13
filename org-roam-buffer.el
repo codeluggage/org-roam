@@ -51,6 +51,56 @@
   "Face for Org-roam titles."
   :group 'org-roam-faces)
 
+(defface org-roam-preview-heading
+  `((((class color) (background light))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :background "grey80"
+     :foreground "grey30")
+    (((class color) (background dark))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :background "grey25"
+     :foreground "grey70"))
+  "Face for preview headings."
+  :group 'org-roam-faces)
+
+(defface org-roam-preview-heading-highlight
+  `((((class color) (background light))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :background "grey75"
+     :foreground "grey30")
+    (((class color) (background dark))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :background "grey35"
+     :foreground "grey70"))
+  "Face for current preview headings."
+  :group 'org-roam-faces)
+
+(defface org-roam-preview-heading-selection
+  `((((class color) (background light))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :inherit org-roam-preview-heading-highlight
+     :foreground "salmon4")
+    (((class color) (background dark))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :inherit org-roam-preview-heading-highlight
+     :foreground "LightSalmon3"))
+  "Face for selected preview headings."
+  :group 'org-roam-faces)
+
+(defface org-roam-preview-region
+  `((t :inherit bold
+       ,@(and (>= emacs-major-version 27)
+              (list :extend (ignore-errors (face-attribute 'region :extend))))))
+  "Face used by `org-roam-highlight-preview-region-using-face'.
+
+This face is overlaid over text that uses other hunk faces,
+and those normally set the foreground and background colors.
+The `:foreground' and especially the `:background' properties
+should be avoided here.  Setting the latter would cause the
+loss of information.  Good properties to set here are `:weight'
+and `:slant'."
+  :group 'org-roam-faces)
+
 ;; Buffer mode
 (defvar org-roam-mode-map
   (let ((map (make-sparse-keymap)))
@@ -94,6 +144,13 @@ which visits the thing at point."
     map)
   "Keymap for Org-roam grep result sections.")
 
+(defvar org-roam-preview-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map org-roam-mode-map)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-preview)
+    map)
+  "Keymap for Org-roam preview.")
+
 (defclass org-roam-node (magit-section)
   ((keymap :initform org-roam-node-map)
    (node :initform nil)))
@@ -107,7 +164,14 @@ which visits the thing at point."
 (defclass org-roam-olp (magit-section)
   ((keymap :initform org-roam-olp-map)
    (file :initform nil)
-   (olp :initform nil)))
+   (olp :initform nil)
+   (heading-highlight-face :initform org-roam-preview-heading-highlight)))
+
+(defclass org-roam-preview (magit-section)
+  ((keymap :initform org-roam-preview-map)
+   (file :initform nil)
+   (begin :initform nil)
+   (end :initform nil)))
 
 (defun org-roam-buffer--preview (file point)
   "Get preview content for FILE at POINT."
@@ -117,7 +181,8 @@ which visits the thing at point."
       (or (org-element-property :raw-value elem)
           (when-let ((begin (org-element-property :begin elem))
                      (end (org-element-property :end elem)))
-            (string-trim (buffer-substring-no-properties begin end)))))))
+            (list begin end
+             (string-trim (buffer-substring-no-properties begin end))))))))
 
 ;;;; Unlinked References Widget
 (defface org-roam-dim
@@ -167,15 +232,24 @@ which visits the thing at point."
               (oset section node source)
               (let ((outline (plist-get props :outline)))
                 (magit-insert-section section (org-roam-olp)
+                  (insert (propertize
+                           (concat
+                            (if outline
+                                (string-join (mapcar #'org-link-display-format outline)
+                                             " > ")
+                              "Top Level")
+                            "\n")
+                           'font-lock-face 'org-roam-preview-heading))
+                  (magit-insert-heading)
                   (oset section file source-file)
                   (oset section olp outline)
-                  (magit-insert-heading (if outline
-                                            (string-join (mapcar #'org-link-display-format outline)
-                                                         " > ")
-                                          "Top Level"))
-                  (magit-insert-section (backlink-preview)
-                    (insert (org-fontify-like-in-org-mode
-                             (org-roam-buffer--preview source-file pos)) "\n")))))))))))
+                  (magit-insert-section section (org-roam-preview)
+                    (pcase-let ((`(,begin ,end ,s) (org-roam-buffer--preview source-file pos)))
+                      (insert (org-fontify-like-in-org-mode s) "\n")
+                      (oset section file source-file)
+                      (oset section begin begin)
+                      (oset section end end))))))))
+        (insert ?\n)))))
 
 (cl-defun org-roam-widget-reflinks (&key node file)
   "Render ref links for NODE."
@@ -206,7 +280,8 @@ which visits the thing at point."
                                              (string-join " > "))))
                   (magit-insert-section (backlink-preview)
                     (insert (org-fontify-like-in-org-mode
-                             (org-roam-buffer--preview source-file pos)) "\n")))))))))))
+                             (org-roam-buffer--preview source-file pos)) "\n")))))))
+        (insert ?\n)))))
 
 (cl-defun org-roam-widget-unlinked-references (&key node file)
   "Render unlinked references for NODE."
@@ -252,7 +327,8 @@ which visits the thing at point."
                                               row col) 'font-lock-face 'org-roam-dim)
                           " "
                           (org-fontify-like-in-org-mode (org-roam-buffer-line-preview f row))
-                          "\n"))))))))))
+                          "\n"))))))
+        (insert ?\n)))))
 
 (defun org-roam-buffer-line-preview (file row)
   (with-temp-buffer

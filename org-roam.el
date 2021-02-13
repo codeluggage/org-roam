@@ -969,7 +969,8 @@ instead.
   "Returns the file at point."
   (if-let ((file (magit-section-case
                    (org-roam-grep (oref it file))
-                   (org-roam-olp (oref it file)))))
+                   (org-roam-olp (oref it file))
+                   (org-roam-preview (oref it file)))))
       file
     (when assert
       (user-error "No file at point"))))
@@ -1008,12 +1009,27 @@ instead.
   (let ((buf (find-file-noselect file)))
     (with-current-buffer buf
       (widen)
-      (condition-case err
-          (let ((m (org-find-olp olp t)))
-            (goto-char (org-find-olp olp t))
-            (set-marker m nil))
-        (error
-         (error "Could not find OLP"))))
+      (when olp
+        (condition-case err
+            (let ((m (org-find-olp olp t)))
+              (goto-char (org-find-olp olp t))
+              (set-marker m nil))
+          (error
+           (error "Could not find OLP")))))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+;;;; preview
+(defun org-roam-visit-preview (file p &optional other-window)
+  "Visits preview."
+  (interactive (list (org-roam-file-at-point t)
+                     (oref (magit-current-section) begin)
+                     current-prefix-arg))
+  (let ((buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (widen)
+      (goto-char p))
     (funcall (if other-window
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
