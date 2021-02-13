@@ -186,80 +186,10 @@ Only relevant when `org-roam-tag-sources' is non-nil."
           (list :tag "Arguments to cl-loop"))
   :group 'org-roam)
 
-(defcustom org-roam-tag-sources '(prop)
-  "Sources to obtain tags from.
-
-It should be a list of symbols representing any of the following
-extraction methods:
-
-  `prop'
-    Extract tags from the #+roam_tags property.
-    Tags are space delimited.
-    Tags may contain spaces if they are double-quoted.
-    e.g. #+roam_tags: TAG \"tag with spaces\"
-
-  `vanilla'
-    Extract vanilla `org-mode' tags, including #+FILETAGS and
-    inherited tags.
-
-  `all-directories'
-    Extract sub-directories relative to `org-roam-directory'.
-    That is, if a file is located at relative path foo/bar/file.org,
-    the file will have tags \"foo\" and \"bar\".
-
-  `last-directory'
-    Extract the last directory relative to `org-roam-directory'.
-    That is, if a file is located at relative path foo/bar/file.org,
-    the file will have tag \"bar\".
-
-  `first-directory'
-    Extract the first directory relative to `org-roam-directory'.
-    That is, if a file is located at relative path foo/bar/file.org,
-    the file will have tag \"foo\"."
-  :type '(set (const :tag "#+roam_tags" prop)
-              (const :tag "buffer org tags" vanilla)
-              (const :tag "sub-directories" all-directories)
-              (const :tag "parent directory" last-directory)
-              (const :tag "first sub-directory" first-directory)))
-
 (defcustom org-roam-title-to-slug-function #'org-roam--title-to-slug
   "Function to be used in converting a title to the filename slug.
 Function should return a filename string based on title."
   :type 'function
-  :group 'org-roam)
-
-(defcustom org-roam-title-sources '((title headline) alias)
-  "The list of sources from which to retrieve a note title.
-Each element in the list is either:
-
-1. a symbol -- this symbol corresponds to a title retrieval
-function, which returns the list of titles for the current buffer
-2. a list of symbols -- symbols in the list are treated as
-with (1).  The return value of this list is the first symbol in
-the list returning a non-nil value.
-
-The return results of the root list are concatenated.
-
-For example the setting: '((title headline) alias) means the following:
-
-1. Return the 'title + 'alias, if the title of current buffer is non-empty;
-2. Or return 'headline + 'alias otherwise.
-
-The currently supported symbols are:
-
-  `title'
-   The \"#+title\" property of org file.
-
-  `alias'
-   The \"#+roam_alias\" property of the org file, using
-   space-delimited strings.
-
-   `headline'
-   The first headline in the org file."
-  :type '(repeat
-          (choice
-           (repeat symbol)
-           (symbol)))
   :group 'org-roam)
 
 (defcustom org-roam-file-completion-tag-position 'prepend
@@ -280,25 +210,6 @@ The currently supported symbols are:
 ;;;; Dynamic variables
 (defvar org-roam-last-window nil
   "Last window `org-roam' was called from.")
-
-(defvar-local org-roam-file-name nil
-  "The corresponding file for a temp buffer.
-This is set by `org-roam--with-temp-buffer', to allow throwing of
-descriptive warnings when certain operations fail (e.g. parsing).")
-
-(defvar org-roam--org-link-bracket-typed-re
-  (rx (seq "[["
-           (group (+? anything))
-           ":"
-           (group
-            (one-or-more
-             (or (not (any "[]\\"))
-                 (and "\\" (zero-or-more "\\\\") (any "[]"))
-                 (and (one-or-more "\\") (not (any "[]"))))))
-           "]"
-           (opt "[" (group (+? anything)) "]")
-           "]"))
-  "Matches a typed link in double brackets.")
 
 ;;;; Utilities
 (defun org-roam--plist-to-alist (plist)
@@ -346,7 +257,6 @@ Like `file-name-extension', but does not strip version number."
   "Return t if FILE is part of Org-roam system, nil otherwise.
 If FILE is not specified, use the current buffer's file-path."
   (when-let ((path (or file
-                       org-roam-file-name
                        (-> (buffer-base-buffer)
                            (buffer-file-name)))))
     (save-match-data
@@ -490,7 +400,7 @@ Use external shell commands if defined in `org-roam-list-files-commands'."
 
 ;;;; Fetchers
 (defun org-roam-node-title (node)
-  "Returns the title for a given NODE."
+  "Return the title for a given NODE."
   (caar (org-roam-db-query [:select title :from nodes
                             :where (= id $s1)]
                            node)))
@@ -713,8 +623,11 @@ Return nil if the file does not exist."
               :exit-function exit-fn)))))
 
 (defun org-roam--get-titles ()
-  "Return all titles within Org-roam."
-  (mapcar #'car (org-roam-db-query [:select [titles:title] :from titles])))
+  "Return all titles and aliases in the Org-roam database."
+  (let* ((titles (mapcar #'car (org-roam-db-query [:select title :from nodes])))
+         (aliases (mapcar #'car (org-roam-db-query [:select alias :from aliases])))
+         (completions (append titles aliases)))
+    completions))
 
 (defun org-roam-complete-everywhere ()
   "`completion-at-point' function for word at point.
@@ -772,7 +685,7 @@ Otherwise, do not apply custom faces to Org-roam links."
 
 ;;;; Hooks and Advices
 (defun org-roam-setup ()
-  "Setup Org-roam"
+  "Setup Org-roam."
   (interactive)
   (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
                    (file-executable-p emacsql-sqlite3-executable))
@@ -802,7 +715,7 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
       (remove-hook 'after-save-hook #'org-roam-db-update-file t))))
 
 (defun org-roam--find-file-hook-function ()
-  "Setup automatic database updates."
+  "Setup automatic database update."
   (when (org-roam--org-roam-file-p)
     (setq org-roam-last-window (get-buffer-window))
     (run-hooks 'org-roam-file-setup-hook) ; Run user hooks
@@ -930,7 +843,8 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
 ;;; Visiting functions
 ;;;; Node
 (defun org-roam-node-at-point (&optional assert)
-  "Returns the node at point."
+  "Return the node at point.
+If ASSERT, throw an error."
   (if-let ((node (magit-section-case
                    (org-roam-node (oref it node)))))
       node
@@ -938,7 +852,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
       (user-error "No node at point"))))
 
 (defun org-roam--find-node (node)
-  "Navigates to the point for NODE, and returns the buffer."
+  "Navigate to the point for NODE, and return the buffer."
   (let ((res (org-roam-db-query [:select [file pos] :from nodes
                                  :where (= id $s1)
                                  :limit 1]
@@ -952,12 +866,11 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
       ('nil (user-error "No node with ID %s" node)))))
 
 (defun org-roam-visit-node (node &optional other-window)
-  "From the buffer, visit the node.
+  "From the buffer, visit NODE.
 
 Display the buffer in the selected window.  With a prefix
 argument OTHER-WINDOW display the buffer in another window
-instead.
-"
+instead."
   (interactive (list (org-roam-node-at-point t) current-prefix-arg))
   (let ((buf (org-roam--find-node node)))
     (funcall (if other-window
@@ -966,7 +879,8 @@ instead.
 
 ;;;; File
 (defun org-roam-file-at-point (&optional assert)
-  "Returns the file at point."
+  "Return the file at point.
+If ASSERT, throw an error."
   (if-let ((file (magit-section-case
                    (org-roam-grep (oref it file))
                    (org-roam-olp (oref it file))
@@ -976,7 +890,10 @@ instead.
       (user-error "No file at point"))))
 
 (defun org-roam-visit-file (file &optional other-window row col)
-  "Visits FILE."
+  "Visits FILE.
+With a prefix argument OTHER-WINDOW, display the buffer in
+another window instead.
+If ROW, move to the row, and if COL move to the COL."
   (interactive (list (org-roam-file-at-point t)
                      current-prefix-arg
                      (oref (magit-current-section) row)
@@ -995,14 +912,17 @@ instead.
 
 ;;;; olp
 (defun org-roam-olp-at-point (&optional assert)
-  "Returns the olp at point."
+  "Return the olp at point.
+If ASSERT, throw an error."
   (magit-section-case
     (org-roam-olp (oref it olp))
     (t (when assert
          (user-error "No olp at point")))))
 
 (defun org-roam-visit-olp (file olp &optional other-window)
-  "Visits FILE."
+  "Visit OLP in FILE.
+With prefix argument OTHER-WINDOW, visit the olp in another
+window instead."
   (interactive (list (org-roam-file-at-point t)
                      (org-roam-olp-at-point t)
                      current-prefix-arg))
@@ -1021,15 +941,17 @@ instead.
                #'pop-to-buffer-same-window) buf)))
 
 ;;;; preview
-(defun org-roam-visit-preview (file p &optional other-window)
-  "Visits preview."
+(defun org-roam-visit-preview (file point &optional other-window)
+  "Visit FILE at POINT.
+With prefix argument OTHER-WINDOW, visit the olp in another
+window instead."
   (interactive (list (org-roam-file-at-point t)
                      (oref (magit-current-section) begin)
                      current-prefix-arg))
   (let ((buf (find-file-noselect file)))
     (with-current-buffer buf
       (widen)
-      (goto-char p))
+      (goto-char point))
     (funcall (if other-window
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
