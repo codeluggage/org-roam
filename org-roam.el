@@ -488,68 +488,12 @@ Use external shell commands if defined in `org-roam-list-files-commands'."
   "Return a list of all Org-roam files within `org-roam-directory'."
   (org-roam--list-files (expand-file-name org-roam-directory)))
 
-;;;; Org extraction functions
-(defun org-roam--extract-global-props-drawer (props)
-  "Extract PROPS from the file-level property drawer in Org."
-  (let (ret)
-    (org-with-point-at 1
-      (dolist (prop props ret)
-        (when-let ((v (org-entry-get (point) prop)))
-          (push (cons prop v) ret))))))
-
-(defun org-roam--extract-global-props-keyword (keywords)
-  "Extract KEYWORDS from the current Org buffer."
-  (let (ret)
-    (pcase-dolist (`(,key . ,values) (org-collect-keywords keywords))
-      (dolist (value values)
-        (push (cons key value) ret)))
-    ret))
-
-(defun org-roam--extract-global-props (props)
-  "Extract PROPS from the current Org buffer.
-Props are extracted from both the file-level property drawer (if
-any), and Org keywords. Org keywords take precedence."
-  (append
-   (org-roam--extract-global-props-keyword props)
-   (org-roam--extract-global-props-drawer props)))
-
-
-(defun org-roam--get-outline-path ()
-  "Return the outline path to the current entry.
-
-An outline path is a list of ancestors for current headline, as a
-list of strings. Statistics cookies are removed and links are
-kept.
-
-When optional argument WITH-SELF is non-nil, the path also
-includes the current headline."
-  (org-with-wide-buffer
-   (save-match-data
-     (and (or (condition-case nil
-                  (org-back-to-heading t)
-                (error nil))
-              (org-up-heading-safe))
-          (reverse (org-roam--get-outline-path-1))))))
-
-(defun org-roam--get-outline-path-1 ()
-  "Return outline path to current headline.
-
-Outline path is a list of strings, in reverse order.  See
-`org-roam--get-outline-path' for details.
-
-Assume buffer is widened and point is on a headline."
-  (when org-complex-heading-regexp
-    (let ((heading (let ((case-fold-search nil))
-                     (looking-at org-complex-heading-regexp)
-                     (if (not (match-end 4)) ""
-                       ;; Remove statistics cookies.
-                       (org-trim
-                        (replace-regexp-in-string
-                         "\\[[0-9]+%\\]\\|\\[[0-9]+/[0-9]+\\]" ""
-                         (match-string-no-properties 4)))))))
-      (if (org-up-heading-safe)
-          (cons heading (org-roam--get-outline-path-1))
-        (list heading)))))
+;;;; Fetchers
+(defun org-roam-node-title (node)
+  "Returns the title for a given NODE."
+  (caar (org-roam-db-query [:select title :from nodes
+                            :where (= id $s1)]
+                           node)))
 
 (defun org-roam--collate-types (type)
   "Collate TYPE into a parent type.
@@ -669,36 +613,38 @@ FILTER can either be a string or a function:
   takes three arguments: the type, the ref, and the file of the
   current candidate. It should return t if that candidate is to
   be included as a candidate."
-  (let ((rows (org-roam-db-query
-               [:select [refs:type refs:ref refs:file titles:title tags:tags]
-                :from titles
-                :left :join tags
-                :on (= titles:file tags:file)
-                :left :join refs :on (= titles:file refs:file)
-                :where refs:file :is :not :null]))
-        completions)
-    (setq rows (seq-sort-by (lambda (x)
-                              (plist-get (nth 3 x) :mtime))
-                            #'time-less-p
-                            rows))
-    (dolist (row rows completions)
-      (pcase-let ((`(,type ,ref ,file-path ,title ,tags) row))
-        (when (pcase filter
-                ('nil t)
-                ((pred stringp) (string= type filter))
-                ((pred functionp) (funcall filter type ref file-path))
-                (wrong-type (signal 'wrong-type-argument
-                                    `((stringp functionp)
-                                      ,wrong-type))))
-          (let ((k (if (eq arg 1)
-                       (concat
-                        (when org-roam-include-type-in-ref-path-completions
-                          (format "{%s} " type))
-                        (org-roam--add-tag-string (format "%s (%s)" title ref)
-                                                  tags))
-                     ref))
-                (v (list :path file-path :type type :ref ref)))
-            (push (cons k v) completions)))))))
+  nil
+  ;; (let ((rows (org-roam-db-query
+  ;;              [:select [refs:type refs:ref refs:file titles:title tags:tags]
+  ;;               :from titles
+  ;;               :left :join tags
+  ;;               :on (= titles:file tags:file)
+  ;;               :left :join refs :on (= titles:file refs:file)
+  ;;               :where refs:file :is :not :null]))
+  ;;       completions)
+  ;;   (setq rows (seq-sort-by (lambda (x)
+  ;;                             (plist-get (nth 3 x) :mtime))
+  ;;                           #'time-less-p
+  ;;                           rows))
+  ;;   (dolist (row rows completions)
+  ;;     (pcase-let ((`(,type ,ref ,file-path ,title ,tags) row))
+  ;;       (when (pcase filter
+  ;;               ('nil t)
+  ;;               ((pred stringp) (string= type filter))
+  ;;               ((pred functionp) (funcall filter type ref file-path))
+  ;;               (wrong-type (signal 'wrong-type-argument
+  ;;                                   `((stringp functionp)
+  ;;                                     ,wrong-type))))
+  ;;         (let ((k (if (eq arg 1)
+  ;;                      (concat
+  ;;                       (when org-roam-include-type-in-ref-path-completions
+  ;;                         (format "{%s} " type))
+  ;;                       (org-roam--add-tag-string (format "%s (%s)" title ref)
+  ;;                                                 tags))
+  ;;                    ref))
+  ;;               (v (list :path file-path :type type :ref ref)))
+  ;;           (push (cons k v) completions))))))
+  )
 
 (defun org-roam--find-ref (ref)
   "Find and open and Org-roam file from REF if it exists.
@@ -717,20 +663,6 @@ Return nil if the file does not exist."
             (buffer-list)))
 
 ;;; org-roam-backlinks-mode
-(define-minor-mode org-roam-backlinks-mode
-  "Minor mode for the `org-roam-buffer'.
-\\{org-roam-backlinks-mode-map}"
-  :lighter " Backlinks"
-  :keymap  (let ((map (make-sparse-keymap)))
-             (define-key map [mouse-1] 'org-open-at-point)
-             (define-key map (kbd "RET") 'org-open-at-point)
-             map))
-
-(defun org-roam--in-buffer-p ()
-  "Return t if in the Org-roam buffer."
-  (and (boundp org-roam-backlinks-mode)
-       org-roam-backlinks-mode))
-
 (defun org-roam--backlink-to-current-p ()
   "Return t if the link at point is to the current Org-roam file."
   (save-match-data
@@ -995,6 +927,97 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
              (not (org-roam-capture-p)))
     (org-roam-db-update-file)))
 
+;;; Visiting functions
+;;;; Node
+(defun org-roam-node-at-point (&optional assert)
+  "Returns the node at point."
+  (if-let ((node (magit-section-case
+                   (org-roam-node (oref it node)))))
+      node
+    (when assert
+      (user-error "No node at point"))))
+
+(defun org-roam--find-node (node)
+  "Navigates to the point for NODE, and returns the buffer."
+  (let ((res (org-roam-db-query [:select [file pos] :from nodes
+                                 :where (= id $s1)
+                                 :limit 1]
+                                node)))
+    (pcase res
+      (`((,file ,pos))
+       (let ((buf (find-file-noselect file)))
+         (with-current-buffer buf
+           (goto-char pos))
+         buf))
+      ('nil (user-error "No node with ID %s" node)))))
+
+(defun org-roam-visit-node (node &optional other-window)
+  "From the buffer, visit the node.
+
+Display the buffer in the selected window.  With a prefix
+argument OTHER-WINDOW display the buffer in another window
+instead.
+"
+  (interactive (list (org-roam-node-at-point t) current-prefix-arg))
+  (let ((buf (org-roam--find-node node)))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+;;;; File
+(defun org-roam-file-at-point (&optional assert)
+  "Returns the file at point."
+  (if-let ((file (magit-section-case
+                   (org-roam-grep (oref it file))
+                   (org-roam-olp (oref it file)))))
+      file
+    (when assert
+      (user-error "No file at point"))))
+
+(defun org-roam-visit-file (file &optional other-window row col)
+  "Visits FILE."
+  (interactive (list (org-roam-file-at-point t)
+                     current-prefix-arg
+                     (oref (magit-current-section) row)
+                     (oref (magit-current-section) col)))
+  (let ((buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (widen)
+      (goto-char (point-min))
+      (when row
+        (forward-line (1- row)))
+      (when col
+        (forward-char (1- col))))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+;;;; olp
+(defun org-roam-olp-at-point (&optional assert)
+  "Returns the olp at point."
+  (magit-section-case
+    (org-roam-olp (oref it olp))
+    (t (when assert
+         (user-error "No olp at point")))))
+
+(defun org-roam-visit-olp (file olp &optional other-window)
+  "Visits FILE."
+  (interactive (list (org-roam-file-at-point t)
+                     (org-roam-olp-at-point t)
+                     current-prefix-arg))
+  (let ((buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (widen)
+      (condition-case err
+          (let ((m (org-find-olp olp t)))
+            (goto-char (org-find-olp olp t))
+            (set-marker m nil))
+        (error
+         (error "Could not find OLP"))))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
 ;;; Interactive Commands
 ;;;###autoload
 (defun org-roam-diagnostics ()
@@ -1012,19 +1035,7 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
     (insert (format "- Org: %s\n" (org-version nil 'full)))
     (insert (format "- Org-roam: %s" (org-roam-version)))))
 
-(defun org-roam--find-node (node)
-  "Navigates to the point for NODE, and returns the buffer."
-  (let ((res (org-roam-db-query [:select [file pos] :from nodes
-                                 :where (= id $s1)
-                                 :limit 1]
-                                node)))
-    (pcase res
-      (`((,file ,pos))
-       (let ((buf (find-file-noselect file)))
-         (with-current-buffer buf
-           (goto-char pos))
-         buf))
-      ((pred nilp) (user-error "No node with ID %s" node)))))
+
 
 ;;;###autoload
 (defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)

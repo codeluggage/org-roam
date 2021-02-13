@@ -350,7 +350,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
     (let ((file (buffer-file-name (buffer-base-buffer)))
           (type (org-element-property :type link))
           (dest (org-element-property :path link))
-          (properties (list :outline (org-roam--get-outline-path)))
+          (properties (list :outline (org-get-outline-path)))
           source)
       (while (not (setq source (org-id-get)))
         (org-up-heading-or-point-min))

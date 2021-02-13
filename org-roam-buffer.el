@@ -34,13 +34,33 @@
 (require 'magit-section)
 
 ;; Faces
+(defface org-roam-header-line
+  `((((class color) (background light))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :foreground "DarkGoldenrod4"
+     :weight bold)
+    (((class color) (background  dark))
+     ,@(and (>= emacs-major-version 27) '(:extend t))
+     :foreground "LightGoldenrod2"
+     :weight bold))
+  "Face for the `header-line' in some Org-roam modes."
+  :group 'org-roam-faces)
+
 (defface org-roam-title
   '((t :weight bold))
   "Face for Org-roam titles."
   :group 'org-roam-faces)
 
 ;; Buffer mode
-(define-derived-mode org-roam-buffer-mode magit-section-mode "Org-roam"
+(defvar org-roam-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map magit-section-mode-map)
+    (define-key map [C-return]  'org-roam-visit-thing)
+    (define-key map (kbd "C-m") 'org-roam-visit-thing)
+    map)
+  "Parent keymap for all keymaps of modes derived from `org-roam-mode'.")
+
+(define-derived-mode org-roam-mode magit-section-mode "Org-roam"
   "Major mode for Org-roam's buffer."
   :group 'org-roam
   (face-remap-add-relative 'header-line 'magit-header-line))
@@ -52,53 +72,42 @@ which visits the thing at point."
   (interactive)
   (user-error "There is no thing at point that could be visited"))
 
-(defvar org-roam-buffer-mode-map
+;; Custom sections
+(defvar org-roam-node-map
   (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map magit-section-mode-map)
-    (define-key map [C-return]  'org-roam-visit-thing)
-    (define-key map (kbd "C-m") 'org-roam-visit-thing)
+    (set-keymap-parent map org-roam-mode-map)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-node)
     map)
-  "Parent keymap for all keymaps of modes derived from `org-roam-buffer-mode'.")
+  "Keymap for Org-roam node sections.")
 
-;;; Widget Classes
-(defclass org-roam-node-section (magit-section)
-  ((keymap :initform org-roam-node-section-map)
+(defvar org-roam-grep-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map org-roam-mode-map)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-file)
+    map)
+  "Keymap for Org-roam grep result sections.")
+
+(defvar org-roam-olp-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map org-roam-mode-map)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-olp)
+    map)
+  "Keymap for Org-roam grep result sections.")
+
+(defclass org-roam-node (magit-section)
+  ((keymap :initform org-roam-node-map)
    (node :initform nil)))
 
-(defclass org-roam-grep-section (magit-section)
-  ((keymap :initform org-roam-grep-section-map)
+(defclass org-roam-grep (magit-section)
+  ((keymap :initform org-roam-grep-map)
    (file :initform nil)
    (row :initform nil)
    (col :initform nil)))
 
-(defun org-roam-buffer-node-at-point (&optional assert)
-  "Returns the node at point."
-  (if-let ((node (magit-section-case
-                   (org-roam-node-section (oref it node)))))
-      node
-    (when assert
-      (user-error "No node at point"))))
-
-(defun org-roam-buffer-file-at-point (&optional assert)
-  "Returns the file at point."
-  (if-let ((node (magit-section-case
-                   (org-roam-grep-section (oref it file)))))
-      node
-    (when assert
-      (user-error "No file at point"))))
-
-(defun org-roam-buffer-visit-node (node &optional other-window)
-  "From the buffer, visit the node.
-
-Display the buffer in the selected window.  With a prefix
-argument OTHER-WINDOW display the buffer in another window
-instead.
-"
-  (interactive (list (org-roam-buffer-node-at-point t) current-prefix-arg))
-  (let ((buf (org-roam--find-node node)))
-    (funcall (if other-window
-                 #'switch-to-buffer-other-window
-               #'pop-to-buffer-same-window) buf)))
+(defclass org-roam-olp (magit-section)
+  ((keymap :initform org-roam-olp-map)
+   (file :initform nil)
+   (olp :initform nil)))
 
 (defun org-roam-buffer--preview (file point)
   "Get preview content for FILE at POINT."
@@ -109,38 +118,6 @@ instead.
           (when-let ((begin (org-element-property :begin elem))
                      (end (org-element-property :end elem)))
             (string-trim (buffer-substring-no-properties begin end)))))))
-
-(defvar org-roam-node-section-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map org-roam-buffer-mode-map)
-    (define-key map [remap org-roam-visit-thing] 'org-roam-buffer-visit-node)
-    map)
-  "Keymap for Org-roam node sections.")
-
-(defvar org-roam-grep-section-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map org-roam-buffer-mode-map)
-    (define-key map [remap org-roam-visit-thing] 'org-roam-buffer-visit-file)
-    map)
-  "Keymap for Org-roam grep result sections.")
-
-(defun org-roam-buffer-visit-file (file &optional other-window row col)
-  "Visits FILE."
-  (interactive (list (org-roam-buffer-file-at-point t)
-                     current-prefix-arg
-                     (oref (magit-current-section) row)
-                     (oref (magit-current-section) col)))
-  (let ((buf (find-file-noselect file)))
-    (with-current-buffer buf
-      (widen)
-      (goto-char (point-min))
-      (when row
-        (forward-line (1- row)))
-      (when col
-        (forward-char (1- col))))
-    (funcall (if other-window
-                 #'switch-to-buffer-other-window
-               #'pop-to-buffer-same-window) buf)))
 
 ;;;; Unlinked References Widget
 (defface org-roam-dim
@@ -185,14 +162,17 @@ instead.
           (setq source (car backlink)
                 values (cdr backlink))
           (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
-            (magit-insert-section section (org-roam-node-section)
+            (magit-insert-section section (org-roam-node)
               (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
               (oset section node source)
-              (let ((outline (or (plist-get props :outline) '("Top"))))
-                (magit-insert-section (backlink-outline)
-                  (magit-insert-heading (org-fontify-like-in-org-mode
-                                         (-> outline
-                                             (string-join " > "))))
+              (let ((outline (plist-get props :outline)))
+                (magit-insert-section section (org-roam-olp)
+                  (oset section file source-file)
+                  (oset section olp outline)
+                  (magit-insert-heading (if outline
+                                            (string-join (mapcar #'org-link-display-format outline)
+                                                         " > ")
+                                          "Top Level"))
                   (magit-insert-section (backlink-preview)
                     (insert (org-fontify-like-in-org-mode
                              (org-roam-buffer--preview source-file pos)) "\n")))))))))))
@@ -200,7 +180,7 @@ instead.
 (cl-defun org-roam-widget-reflinks (&key node file)
   "Render ref links for NODE."
   ;; TODO
-  (when t                               ; TODO: whether to show reflinks
+  (when nil                               ; TODO: whether to show reflinks
     (let* ((reflinks (org-roam-db-query
                       [:select [links:source links:file links:pos s:title links:dest d:title links:properties]
                        :from links
@@ -215,7 +195,7 @@ instead.
         (dolist (reflink reflinks)
           (setq source (car reflink)
                 values (cdr reflink))
-          (magit-insert-section section (org-roam-node-section)
+          (magit-insert-section section (org-roam-node)
             (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
               (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
               (let ((outline (or (plist-get props :outline) '("Top"))))
@@ -263,7 +243,7 @@ instead.
               (when (and match
                          (not (f-equal-p file f))
                          (member (downcase match) (mapcar #'downcase titles)))
-                (magit-insert-section section (org-roam-grep-section)
+                (magit-insert-section section (org-roam-grep)
                   (oset section file f)
                   (oset section row row)
                   (oset section col col)
@@ -298,7 +278,9 @@ instead.
     (with-current-buffer buffer
        (let ((inhibit-read-only t))
          (erase-buffer)
-         (org-roam-buffer-mode)
+         (org-roam-mode)
+         (org-roam-set-header-line-format
+          (org-roam-node-title node))
          (magit-insert-section (demo-buffer)
            (magit-insert-heading)
            (dolist (widget org-roam-widgets)

@@ -102,6 +102,15 @@ If FILE, set `org-roam-temp-file-name' to file and insert its contents."
        (s-replace "\\" "\\\\")
        (s-replace "\"" "\\\"")))
 
+(defun org-roam-set-header-line-format (string)
+  "Set the header-line using STRING.
+If the `face' property of any part of STRING is already set, then
+that takes precedence. Also pad the left side of STRING so that
+it aligns with the text area."
+  (setq-local header-line-format
+        (concat (propertize " " 'display '(space :align-to 0))
+                string)))
+
 ;;; Shielding regions
 (defun org-roam-shield-region (beg end)
   "Shield REGION against modifications.
