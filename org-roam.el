@@ -136,11 +136,6 @@ Formatter may be a function that takes title as its only argument."
           (function :tag "Custom function"))
   :group 'org-roam)
 
-(defcustom org-roam-prefer-id-links t
-  "If non-nil, use ID for linking instead where available."
-  :type 'boolean
-  :group 'org-roam)
-
 (defcustom org-roam-list-files-commands
   (if (member system-type '(windows-nt ms-dos cygwin))
       nil
@@ -586,7 +581,6 @@ Return nil if the file does not exist."
                                (_ dest))))))
       (string= current-file backlink-dest))))
 
-
 ;;; Completion at point
 (defcustom org-roam-completion-everywhere nil
   "If non-nil, provide completions from the current word at point."
@@ -729,79 +723,12 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
              (org-roam--org-roam-file-p file))
     (org-roam-db-clear-file (expand-file-name file))))
 
-(defun org-roam--get-link-replacement (old-path new-path &optional old-desc new-desc)
-  "Create replacement text for link at point if OLD-PATH is a match.
-Will update link to NEW-PATH. If OLD-DESC is set, and is not the
-same as the link description, it is assumed that the user has
-modified the description, and the description will not be
-updated. Else, update with NEW-DESC."
-  (let (type path link-type label new-label)
-    (when-let ((link (org-element-lineage (org-element-context) '(link) t)))
-      (setq type (org-element-property :type link)
-            path (org-element-property :path link))
-      (when (and (string-equal (expand-file-name path) old-path)
-                 (org-in-regexp org-link-bracket-re 1))
-        (setq link-type (when (file-name-absolute-p path) 'absolute)
-              label (if (match-end 2)
-                        (match-string-no-properties 2)
-                      (org-link-unescape (match-string-no-properties 1))))
-        (setq new-label (if (string-equal label old-desc) new-desc label))
-        (org-roam-format-link new-path new-label type link-type)))))
-
-(defun org-roam--replace-link (old-path new-path &optional old-desc new-desc)
-  "Replace Org-roam file links with path OLD-PATH to path NEW-PATH.
-If OLD-DESC is passed, and is not the same as the link
-description, it is assumed that the user has modified the
-description, and the description will not be updated. Else,
-update with NEW-DESC."
-  (org-with-point-at 1
-    (while (re-search-forward org-link-bracket-re nil t)
-      (when-let ((link (save-match-data
-                         (org-roam--get-link-replacement
-                          old-path new-path
-                          old-desc new-desc))))
-        (replace-match link)))))
-
-(defun org-roam--fix-relative-links (old-path)
-  "Fix file-relative links in current buffer.
-File relative links are assumed to originate from OLD-PATH. The
-replaced links are made relative to the current buffer."
-  (org-with-point-at 1
-    (let (link new-link type path)
-      (while (re-search-forward org-link-bracket-re nil t)
-        (when (setq link (save-match-data (org-element-lineage (org-element-context) '(link) t)))
-          (setq type (org-element-property :type link))
-          (setq path (org-element-property :path link))
-          (when (and (string= type "file")
-                     (f-relative-p path))
-            (setq path (expand-file-name path (file-name-directory old-path)))
-            (setq new-link
-                  (concat type ":" (org-roam-link-get-path path)))
-            (replace-match new-link nil t nil 1)))))))
-
-(defun org-roam--update-links-on-title-change (old-title new-title)
-  "Update the link description of other Org-roam files.
-Iterate over all Org-roam files that have link description of
-OLD-TITLE, and replace the link descriptions with the NEW-TITLE
-if applicable.
-
-To be added to `org-roam-title-change-hook'."
-  (let* ((current-path (buffer-file-name))
-         (files-affected (org-roam-db-query [:select :distinct [source]
-                                             :from links
-                                             :where (= dest $s1)]
-                                            current-path)))
-    (dolist (file files-affected)
-      (org-roam-with-file (car file) nil
-        (org-roam--replace-link current-path current-path old-title new-title)))))
-
 (defun org-roam--rename-file-advice (old-file new-file-or-dir &rest _args)
   "Rename backlinks of OLD-FILE to refer to NEW-FILE-OR-DIR.
 When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
   (let ((new-file (if (directory-name-p new-file-or-dir)
                       (expand-file-name (file-name-nondirectory old-file) new-file-or-dir)
-                    new-file-or-dir))
-        files-affected)
+                    new-file-or-dir)))
     (setq new-file (expand-file-name new-file))
     (setq old-file (expand-file-name old-file))
     (when (and (not (auto-save-file-name-p old-file))
@@ -809,30 +736,9 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
                (not (backup-file-name-p old-file))
                (not (backup-file-name-p new-file))
                (org-roam--org-roam-file-p old-file))
-      (setq files-affected (org-roam-db-query [:select :distinct [source]
-                                               :from links
-                                               :where (= dest $s1)]
-                                              old-file))
-      ;; Remove database entries for old-file.org
       (org-roam-db-clear-file old-file)
-      ;; If the new path is in a different directory, relative links
-      ;; will break. Fix all file-relative links:
-      (unless (string= (file-name-directory old-file)
-                       (file-name-directory new-file))
-        (org-roam-with-file new-file nil
-          (org-roam--fix-relative-links old-file)))
       (when (org-roam--org-roam-file-p new-file)
-        (org-roam-db-update-file new-file))
-      ;; Replace links from old-file.org -> new-file.org in all Org-roam files with these links
-      (mapc (lambda (file)
-              (setq file (if (string-equal (car file) old-file)
-                             new-file
-                           (car file)))
-              (org-roam-with-file file nil
-                (org-roam--replace-link old-file new-file)
-                (save-buffer)
-                (org-roam-db-update-file)))
-            files-affected))))
+        (org-roam-db-update-file new-file)))))
 
 (defun org-roam--id-new-advice (&rest _args)
   "Update the database if a new Org ID is created."
@@ -972,8 +878,6 @@ window instead."
                       (quit "N/A"))))
     (insert (format "- Org: %s\n" (org-version nil 'full)))
     (insert (format "- Org-roam: %s" (org-roam-version)))))
-
-
 
 ;;;###autoload
 (defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)
