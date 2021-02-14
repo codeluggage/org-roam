@@ -1,7 +1,7 @@
 ((emacs-lisp-mode
   (fill-column . 110)
   (indent-tabs-mode . nil)
-  (elisp-lint-ignored-validators . ("byte-compile"))
+  (elisp-lint-ignored-validators . ("byte-compile" "package-lint"))
   (elisp-lint-indent-specs . ((describe . 1)
                               (it . 1)
                               (org-roam--with-temp-buffer . 1)

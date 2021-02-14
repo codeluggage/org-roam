@@ -56,7 +56,7 @@
 ;; ~NV [2020-05-22 Fri]
 
 (require 'org-roam-faces)
-(require 'org-roam-buffer)
+(require 'org-roam-mode)
 (require 'org-roam-completion)
 (require 'org-roam-capture)
 (require 'org-roam-dailies)
@@ -394,12 +394,6 @@ Use external shell commands if defined in `org-roam-list-files-commands'."
   (org-roam--list-files (expand-file-name org-roam-directory)))
 
 ;;;; Fetchers
-(defun org-roam-node-title (node)
-  "Return the title for a given NODE."
-  (caar (org-roam-db-query [:select title :from nodes
-                            :where (= id $s1)]
-                           node)))
-
 (defun org-roam--collate-types (type)
   "Collate TYPE into a parent type.
 Packages like `org-ref' introduce many different link prefixes,
@@ -567,20 +561,6 @@ Return nil if the file does not exist."
                  (org-roam--org-roam-file-p (buffer-file-name it)))
             (buffer-list)))
 
-;;; org-roam-backlinks-mode
-(defun org-roam--backlink-to-current-p ()
-  "Return t if the link at point is to the current Org-roam file."
-  (save-match-data
-    (let ((current-file (buffer-file-name org-roam-buffer--current))
-          (backlink-dest (save-excursion
-                           (let* ((context (org-element-context))
-                                  (type (org-element-property :type context))
-                                  (dest (org-element-property :path context)))
-                             (pcase type
-                               ("id" (org-roam-id-get-file dest))
-                               (_ dest))))))
-      (string= current-file backlink-dest))))
-
 ;;; Completion at point
 (defcustom org-roam-completion-everywhere nil
   "If non-nil, provide completions from the current word at point."
@@ -677,7 +657,7 @@ Otherwise, do not apply custom faces to Org-roam links."
           (const :tag "Do not apply custom faces" nil))
   :group 'org-roam)
 
-;;;; Hooks and Advices
+;;; Org-roam entry point
 (defun org-roam-setup ()
   "Setup Org-roam."
   (interactive)
@@ -708,6 +688,7 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
     (with-current-buffer buf
       (remove-hook 'after-save-hook #'org-roam-db-update-file t))))
 
+;;; Hooks and advices
 (defun org-roam--find-file-hook-function ()
   "Setup automatic database update."
   (when (org-roam--org-roam-file-p)
@@ -864,22 +845,6 @@ window instead."
 
 ;;; Interactive Commands
 ;;;###autoload
-(defun org-roam-diagnostics ()
-  "Collect and print info for `org-roam' issues."
-  (interactive)
-  (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*org-roam diagnostics*"))
-    (erase-buffer)
-    (insert (propertize "Copy info below this line into issue:\n" 'face '(:weight bold)))
-    (insert (format "- Emacs: %s\n" (emacs-version)))
-    (insert (format "- Framework: %s\n"
-                    (condition-case _
-                        (completing-read "I'm using the following Emacs framework:"
-                                         '("Doom" "Spacemacs" "N/A" "I don't know"))
-                      (quit "N/A"))))
-    (insert (format "- Org: %s\n" (org-version nil 'full)))
-    (insert (format "- Org-roam: %s" (org-roam-version)))))
-
-;;;###autoload
 (defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)
   "Find and open an Org-roam node by its title or alias.
 INITIAL-PROMPT is the initial prompt.
@@ -893,8 +858,7 @@ If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
                         completions))
          (title-with-tags (if no-confirm
                               initial-prompt
-                            (org-roam-completion--completing-read "File: " completions
-                                                                  :initial-input initial-prompt)))
+                            (completing-read "File: " completions nil nil initial-prompt)))
          (res (cdr (assoc title-with-tags completions)))
          (file-path (plist-get res :path)))
     (if file-path
@@ -927,9 +891,7 @@ current candidate.  It should return t if that candidate is to be
 included as a candidate."
   (interactive "p")
   (let* ((completions (org-roam--get-ref-path-completions arg filter))
-         (ref (org-roam-completion--completing-read "Ref: "
-                                                    completions
-                                                    :require-match t))
+         (ref (completing-read "Ref: " completions nil t))
          (file (-> (cdr (assoc ref completions))
                    (plist-get :path))))
     (find-file file)))
@@ -967,8 +929,7 @@ If DESCRIPTION is provided, use this as the link label."
                               (if filter-fn
                                   (funcall filter-fn it)
                                 it)))
-               (title-with-tags (org-roam-completion--completing-read "File: " completions
-                                                                      :initial-input region-text))
+               (title-with-tags (completing-read "File: " completions nil nil region-text))
                (res (cdr (assoc title-with-tags completions)))
                (title (or (plist-get res :title)
                           title-with-tags))
@@ -1015,6 +976,7 @@ command will offer you to create one."
       (when (y-or-n-p "Index file does not exist.  Would you like to create it? ")
         (org-roam-find-file "Index")))))
 
+;;; Diagnostics
 ;;;###autoload
 (defun org-roam-version (&optional message)
   "Return `org-roam' version.
@@ -1031,6 +993,22 @@ Interactively, or when MESSAGE is non-nil, show in the echo area."
     (if (or message (called-interactively-p 'interactive))
         (message "%s" version)
       version)))
+
+;;;###autoload
+(defun org-roam-diagnostics ()
+  "Collect and print info for `org-roam' issues."
+  (interactive)
+  (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*org-roam diagnostics*"))
+    (erase-buffer)
+    (insert (propertize "Copy info below this line into issue:\n" 'face '(:weight bold)))
+    (insert (format "- Emacs: %s\n" (emacs-version)))
+    (insert (format "- Framework: %s\n"
+                    (condition-case _
+                        (completing-read "I'm using the following Emacs framework:"
+                                         '("Doom" "Spacemacs" "N/A" "I don't know"))
+                      (quit "N/A"))))
+    (insert (format "- Org: %s\n" (org-version nil 'full)))
+    (insert (format "- Org-roam: %s" (org-roam-version)))))
 
 (provide 'org-roam)
 ;;; org-roam.el ends here
