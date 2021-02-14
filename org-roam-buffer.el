@@ -182,7 +182,7 @@ which visits the thing at point."
           (when-let ((begin (org-element-property :begin elem))
                      (end (org-element-property :end elem)))
             (list begin end
-             (string-trim (buffer-substring-no-properties begin end))))))))
+                  (string-trim (buffer-substring-no-properties begin end))))))))
 
 ;;;; Unlinked References Widget
 (defface org-roam-dim
@@ -206,20 +206,22 @@ which visits the thing at point."
   (list #'org-roam-widget-backlinks
         #'org-roam-widget-reflinks
         #'org-roam-widget-unlinked-references)
-  "List of Org-roam widgets. These are functions that render into
-  magit sections.")
+  "List of functions that render Org-roam widgets.")
 
-(cl-defun org-roam-widget-backlinks (&key node file)
+(defun org-roam-buffer-db-backlinks (node)
+  "Return the backlinks for NODE."
+  (org-roam-db-query
+   [:select [links:source links:file links:pos s:title links:dest d:title links:properties]
+    :from links
+    :left :join nodes s :on (= links:source s:id)
+    :left :join nodes d :on (= links:dest d:id)
+    :where (= dest $s1)]
+   node))
+
+(cl-defun org-roam-widget-backlinks (&key node _file)
   "Render backlinks for NODE."
   (when t                               ; TODO: whether to show backlinks
-    (let* ((backlinks (org-roam-db-query
-                       [:select [links:source links:file links:pos s:title links:dest d:title links:properties]
-                        :from links
-                        :left :join nodes s :on (= links:source s:id)
-                        :left :join nodes d :on (= links:dest d:id)
-                        :where (= dest $s1)]
-                       node))
-           (backlinks (seq-group-by #'car backlinks))
+    (let* ((backlinks (seq-group-by #'car (org-roam-buffer-db-backlinks node)))
            source values)
       (magit-insert-section (backlinks-section)
         (magit-insert-heading "Backlinks:")
@@ -251,7 +253,7 @@ which visits the thing at point."
                       (oset section end end))))))))
         (insert ?\n)))))
 
-(cl-defun org-roam-widget-reflinks (&key node file)
+(cl-defun org-roam-widget-reflinks (&key node _file)
   "Render ref links for NODE."
   ;; TODO
   (when nil                               ; TODO: whether to show reflinks
@@ -284,7 +286,8 @@ which visits the thing at point."
         (insert ?\n)))))
 
 (cl-defun org-roam-widget-unlinked-references (&key node file)
-  "Render unlinked references for NODE."
+  "Render unlinked references for NODE.
+References from FILE are excluded."
   (when (and (executable-find "rg")
              (not (string-match "PCRE2 is not available" (shell-command-to-string "rg --pcre2-version"))))
     (let* ((title (caar (org-roam-db-query [:select [title] :from nodes
@@ -298,7 +301,8 @@ which visits the thing at point."
            (titles (cons title aliases))
            (rg-command (concat "rg -o --vimgrep -P -i "
                                (string-join (mapcar (lambda (glob) (concat "-g " glob))
-                                                    (org-roam--list-files-search-globs org-roam-file-extensions)) " ")
+                                                    (org-roam--list-files-search-globs
+                                                     org-roam-file-extensions)) " ")
                                (format " '\\[([^[]]++|(?R))*\\]%s' "
                                        (mapconcat (lambda (title)
                                                     (format "|(\\b%s\\b)" (shell-quote-argument title)))
@@ -331,36 +335,39 @@ which visits the thing at point."
         (insert ?\n)))))
 
 (defun org-roam-buffer-line-preview (file row)
+  "Return the preview line from FILE.
+This is the ROW within FILE."
   (with-temp-buffer
     (insert-file-contents-literally file)
     (forward-line (1- row))
-    (buffer-substring-no-properties (save-excursion
-                                      (beginning-of-line)
-                                      (point))
-                                    (save-excursion
-                                      (end-of-line)
-                                      (point)))))
+    (buffer-substring-no-properties
+     (save-excursion
+       (beginning-of-line)
+       (point))
+     (save-excursion
+       (end-of-line)
+       (point)))))
 
-;; current Test Function
 (defun org-roam-buffer ()
+  "Launch an Org-roam buffer for the current node at point."
   (interactive)
   (unless (org-roam--org-file-p (buffer-file-name (buffer-base-buffer)))
     (user-error "Not in Org-roam file"))
   (let ((file (buffer-file-name))
         (buffer (get-buffer-create
                  (concat "org-roam: "
-                         (buffer-file-name))))
+                         (file-relative-name (buffer-file-name) org-roam-directory))))
         (node (org-roam-current-node)))
     (with-current-buffer buffer
-       (let ((inhibit-read-only t))
-         (erase-buffer)
-         (org-roam-mode)
-         (org-roam-set-header-line-format
-          (org-roam-node-title node))
-         (magit-insert-section (demo-buffer)
-           (magit-insert-heading)
-           (dolist (widget org-roam-widgets)
-             (funcall widget :node node :file file)))))
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (org-roam-mode)
+        (org-roam-set-header-line-format
+         (org-roam-node-title node))
+        (magit-insert-section (demo-buffer)
+          (magit-insert-heading)
+          (dolist (widget org-roam-widgets)
+            (funcall widget :node node :file file)))))
     (switch-to-buffer-other-window buffer)))
 
 (provide 'org-roam-buffer)
