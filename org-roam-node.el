@@ -54,14 +54,14 @@
 (defvar org-roam-olp-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map org-roam-mode-map)
-    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-olp)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-olp-visit)
     map)
   "Keymap for Org-roam grep result sections.")
 
 (defvar org-roam-preview-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map org-roam-mode-map)
-    (define-key map [remap org-roam-visit-thing] 'org-roam-visit-preview)
+    (define-key map [remap org-roam-visit-thing] 'org-roam-preview-visit)
     map)
   "Keymap for Org-roam preview.")
 
@@ -104,6 +104,87 @@
                      (end (org-element-property :end elem)))
             (list begin end
                   (string-trim (buffer-substring-no-properties begin end))))))))
+
+(defun org-roam-node-at-point (&optional assert)
+  "Return the node at point.
+If ASSERT, throw an error."
+  (if-let ((node (magit-section-case
+                   (org-roam-node (oref it node)))))
+      node
+    (when assert
+      (user-error "No node at point"))))
+
+(defun org-roam-node-find (node)
+  "Navigate to the point for NODE, and return the buffer."
+  (let ((res (org-roam-db-query [:select [file pos] :from nodes
+                                 :where (= id $s1)
+                                 :limit 1]
+                                node)))
+    (pcase res
+      (`((,file ,pos))
+       (let ((buf (find-file-noselect file)))
+         (with-current-buffer buf
+           (goto-char pos))
+         buf))
+      ('nil (user-error "No node with ID %s" node)))))
+
+(defun org-roam-node-visit (node &optional other-window)
+  "From the buffer, visit NODE.
+
+Display the buffer in the selected window.  With a prefix
+argument OTHER-WINDOW display the buffer in another window
+instead."
+  (interactive (list (org-roam-node-at-point t) current-prefix-arg))
+  (let ((buf (org-roam-node-find node)))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+;; TODO: move to own file
+(defun org-roam-olp-at-point (&optional assert)
+  "Return the olp at point.
+If ASSERT, throw an error."
+  (magit-section-case
+    (org-roam-olp (oref it olp))
+    (t (when assert
+         (user-error "No olp at point")))))
+
+(defun org-roam-olp-visit (file olp &optional other-window)
+  "Visit OLP in FILE.
+With prefix argument OTHER-WINDOW, visit the olp in another
+window instead."
+  (interactive (list (org-roam-file-at-point t)
+                     (org-roam-olp-at-point t)
+                     current-prefix-arg))
+  (let ((buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (widen)
+      (when olp
+        (condition-case err
+            (let ((m (org-find-olp olp t)))
+              (goto-char (org-find-olp olp t))
+              (set-marker m nil))
+          (error
+           (error "Could not find OLP")))))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
+(defun org-roam-preview-visit (file point &optional other-window)
+  "Visit FILE at POINT.
+With prefix argument OTHER-WINDOW, visit the olp in another
+window instead."
+  (interactive (list (org-roam-file-at-point t)
+                     (oref (magit-current-section) begin)
+                     current-prefix-arg))
+  (let ((buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (widen)
+      (goto-char point))
+    (funcall (if other-window
+                 #'switch-to-buffer-other-window
+               #'pop-to-buffer-same-window) buf)))
+
 
 ;;; Section inserter
 ;;;; TODO: Move to own backlinks widget
