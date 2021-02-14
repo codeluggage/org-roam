@@ -184,7 +184,7 @@ which visits the thing at point."
             (list begin end
                   (string-trim (buffer-substring-no-properties begin end))))))))
 
-;;;; Unlinked References Widget
+;;;; Unlinked References
 (defface org-roam-dim
   '((((class color) (background light)) :foreground "grey60")
     (((class color) (background  dark)) :foreground "grey40"))
@@ -202,10 +202,10 @@ which visits the thing at point."
   "Regex for the return result of a ripgrep query.")
 
 ;;;
-(defvar org-roam-widgets
-  (list #'org-roam-widget-backlinks
-        #'org-roam-widget-reflinks
-        #'org-roam-widget-unlinked-references)
+(defvar org-roam-buffer-widgets
+  (list #'org-roam-buffer-backlinks
+        #'org-roam-buffer-reflinks
+        #'org-roam-buffer-unlinked-references)
   "List of functions that render Org-roam widgets.")
 
 (defun org-roam-buffer-db-backlinks (node)
@@ -218,7 +218,7 @@ which visits the thing at point."
     :where (= dest $s1)]
    node))
 
-(cl-defun org-roam-widget-backlinks (&key node _file)
+(cl-defun org-roam-buffer-backlinks (&key node _file)
   "Render backlinks for NODE."
   (when t                               ; TODO: whether to show backlinks
     (let* ((backlinks (seq-group-by #'car (org-roam-buffer-db-backlinks node)))
@@ -253,7 +253,7 @@ which visits the thing at point."
                       (oset section end end))))))))
         (insert ?\n)))))
 
-(cl-defun org-roam-widget-reflinks (&key node _file)
+(cl-defun org-roam-buffer-reflinks (&key node _file)
   "Render ref links for NODE."
   ;; TODO
   (when nil                               ; TODO: whether to show reflinks
@@ -285,7 +285,7 @@ which visits the thing at point."
                              (org-roam-buffer--preview source-file pos)) "\n")))))))
         (insert ?\n)))))
 
-(cl-defun org-roam-widget-unlinked-references (&key node file)
+(cl-defun org-roam-buffer-unlinked-references (&key node file)
   "Render unlinked references for NODE.
 References from FILE are excluded."
   (when (and (executable-find "rg")
@@ -366,7 +366,7 @@ This is the ROW within FILE."
          (org-roam-node-title node))
         (magit-insert-section (demo-buffer)
           (magit-insert-heading)
-          (dolist (widget org-roam-widgets)
+          (dolist (widget org-roam-buffer-widgets)
             (funcall widget :node node :file file)))))
     (switch-to-buffer-other-window buffer)))
 
