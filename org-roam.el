@@ -547,34 +547,6 @@ Return nil if the file does not exist."
   :type 'boolean)
 
 ;;;; Tags completion
-(defun org-roam-complete-tags-at-point ()
-  "`completion-at-point' function for Org-roam tags."
-  (let ((end (point))
-        (start (point))
-        (exit-fn (lambda (&rest _) nil))
-        collection)
-    (when (looking-back "^#\\+roam_tags:.*" (line-beginning-position))
-      (when (looking-at "\\>")
-        (setq start (save-excursion (skip-syntax-backward "w")
-                                    (point))
-              end (point)))
-      (setq collection #'org-roam-db--get-tags
-            exit-fn (lambda (str _status)
-                      (delete-char (- (length str)))
-                      (insert "\"" str "\""))))
-    (when collection
-      (let ((prefix (buffer-substring-no-properties start end)))
-        (list start end
-              (if (functionp collection)
-                  (completion-table-case-fold
-                   (completion-table-dynamic
-                    (lambda (_)
-                      (cl-remove-if (apply-partially #'string= prefix)
-                                    (funcall collection))))
-                   (not org-roam-completion-ignore-case))
-                collection)
-              :exit-function exit-fn)))))
-
 (defun org-roam--get-titles ()
   "Return all titles and aliases in the Org-roam database."
   (let* ((titles (mapcar #'car (org-roam-db-query [:select title :from nodes])))
@@ -611,7 +583,6 @@ This is active when `org-roam-completion-everywhere' is non-nil."
                 collection)
               :exit-function exit-fn)))))
 
-(add-to-list 'org-roam-completion-functions #'org-roam-complete-tags-at-point)
 (add-to-list 'org-roam-completion-functions #'org-roam-complete-everywhere)
 (add-to-list 'org-roam-completion-functions #'org-roam-link-complete-at-point)
 
@@ -638,7 +609,6 @@ Otherwise, do not apply custom faces to Org-roam links."
 
 ;;; Org-roam entry point
 (defun org-roam-setup ()
-  "Setup Org-roam."
   (interactive)
   (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
                    (file-executable-p emacsql-sqlite3-executable))
