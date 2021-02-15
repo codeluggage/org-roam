@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -42,9 +42,6 @@
 (defvar org-roam-directory)
 (defvar org-roam-title-to-slug-function)
 (defvar org-roam-file-extensions)
-
-(declare-function  org-roam--get-ref-path-completions   "org-roam")
-(declare-function  org-roam--split-ref                 "org-roam")
 
 (defvar org-roam-capture--file-path nil
   "The file path for the Org-roam capture.
@@ -477,14 +474,14 @@ This function is used solely in Org-roam's capture templates: see
                       ('dailies
                        (org-capture-put :default-time (cdr (assoc 'time org-roam-capture--info)))
                        (org-roam-capture--new-file 'allow-existing))
-                      ('ref
-                       (if-let ((ref (cdr (assoc 'ref org-roam-capture--info))))
-                           (pcase (org-roam--split-ref ref)
-                             (`(,type . ,path)
-                              (or (org-roam-capture--get-ref-path type path)
-                                  (org-roam-capture--new-file)))
-                             (_ (user-error "%s is not a valid ref" ref)))
-                         (error "Ref not found in `org-roam-capture--info'")))
+                      ;; ('ref
+                      ;;  (if-let ((ref (cdr (assoc 'ref org-roam-capture--info))))
+                      ;;      (pcase (org-roam--split-ref ref)
+                      ;;        (`(,type . ,path)
+                      ;;         (or (org-roam-capture--get-ref-path type path)
+                      ;;             (org-roam-capture--new-file)))
+                      ;;        (_ (user-error "%s is not a valid ref" ref)))
+                      ;;    (error "Ref not found in `org-roam-capture--info'")))
                       (_ (error "Invalid org-roam-capture-context")))))
     (org-capture-put :template
                      (org-roam-capture--fill-template (org-capture-get :template)))

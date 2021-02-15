@@ -766,12 +766,6 @@ included as a candidate."
     (find-file file)))
 
 ;;;###autoload
-(defun org-roam-random-note ()
-  "Find a random Org-roam file."
-  (interactive)
-  (find-file (seq-random-elt (org-roam--list-all-files))))
-
-;;;###autoload
 (defun org-roam-insert (&optional lowercase completions filter-fn description link-type)
   "Find an Org-roam file, and insert a relative org link to it at point.
 Return selected file if it exists.
@@ -821,7 +815,8 @@ If DESCRIPTION is provided, use this as the link label."
                           (slug . ,(funcall org-roam-title-to-slug-function title-with-tags))))
                        (org-roam-capture--context 'title))
                    (setq org-roam-capture-additional-template-props
-                         (list :region (org-roam-shield-region beg end)
+                         (list :region (when (and beg end)
+                                         (cons beg end))
                                :insert-at (point-marker)
                                :link-type link-type
                                :link-description description
@@ -829,40 +824,6 @@ If DESCRIPTION is provided, use this as the link label."
                    (org-roam-capture--capture))))
           res))
     (deactivate-mark)))
-
-;;; Diagnostics
-;;;###autoload
-(defun org-roam-version (&optional message)
-  "Return `org-roam' version.
-Interactively, or when MESSAGE is non-nil, show in the echo area."
-  (interactive)
-  (let* ((version
-          (with-temp-buffer
-            (insert-file-contents-literally (locate-library "org-roam.el"))
-            (goto-char (point-min))
-            (save-match-data
-              (if (re-search-forward "\\(?:;; Version: \\([^z-a]*?$\\)\\)" nil nil)
-                  (substring-no-properties (match-string 1))
-                "N/A")))))
-    (if (or message (called-interactively-p 'interactive))
-        (message "%s" version)
-      version)))
-
-;;;###autoload
-(defun org-roam-diagnostics ()
-  "Collect and print info for `org-roam' issues."
-  (interactive)
-  (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*org-roam diagnostics*"))
-    (erase-buffer)
-    (insert (propertize "Copy info below this line into issue:\n" 'face '(:weight bold)))
-    (insert (format "- Emacs: %s\n" (emacs-version)))
-    (insert (format "- Framework: %s\n"
-                    (condition-case _
-                        (completing-read "I'm using the following Emacs framework:"
-                                         '("Doom" "Spacemacs" "N/A" "I don't know"))
-                      (quit "N/A"))))
-    (insert (format "- Org: %s\n" (org-version nil 'full)))
-    (insert (format "- Org-roam: %s" (org-roam-version)))))
 
 (provide 'org-roam)
 ;;; org-roam.el ends here

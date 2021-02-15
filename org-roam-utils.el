@@ -69,30 +69,62 @@ If the `face' property of any part of STRING is already set, then
 that takes precedence. Also pad the left side of STRING so that
 it aligns with the text area."
   (setq-local header-line-format
-        (concat (propertize " " 'display '(space :align-to 0))
-                string)))
+              (concat (propertize " " 'display '(space :align-to 0))
+                      string)))
 
 ;;; Shielding regions
 (defun org-roam-shield-region (beg end)
-  "Shield REGION against modifications.
+  "Shield region against modifications.
+BEG and END are markers for the beginning and end regions.
 REGION must be a cons-cell containing the marker to the region
 beginning and maximum values."
-  (when (and beg end)
-    (add-text-properties beg end
-                           '(font-lock-face org-roam-shielded
-                                            read-only t)
-                           (marker-buffer beg))
-    (cons beg end)))
+  (add-text-properties beg end
+                       '(font-lock-face org-roam-shielded
+                                        read-only t)
+                       (marker-buffer beg)))
 
 (defun org-roam-unshield-region (beg end)
-  "Unshield the shielded REGION."
-  (when (and beg end)
-    (let ((inhibit-read-only t))
-      (remove-text-properties beg end
-                              '(font-lock-face org-roam-shielded
-                                               read-only t)
-                              (marker-buffer beg)))
-    (cons beg end)))
+  "Unshield the shielded REGION.
+BEG and END are markers for the beginning and end regions."
+  (let ((inhibit-read-only t))
+    (remove-text-properties beg end
+                            '(font-lock-face org-roam-shielded
+                                             read-only t)
+                            (marker-buffer beg))))
+
+;;; Diagnostics
+;;;###autoload
+(defun org-roam-version (&optional message)
+  "Return `org-roam' version.
+Interactively, or when MESSAGE is non-nil, show in the echo area."
+  (interactive)
+  (let* ((version
+          (with-temp-buffer
+            (insert-file-contents-literally (locate-library "org-roam.el"))
+            (goto-char (point-min))
+            (save-match-data
+              (if (re-search-forward "\\(?:;; Version: \\([^z-a]*?$\\)\\)" nil nil)
+                  (substring-no-properties (match-string 1))
+                "N/A")))))
+    (if (or message (called-interactively-p 'interactive))
+        (message "%s" version)
+      version)))
+
+;;;###autoload
+(defun org-roam-diagnostics ()
+  "Collect and print info for `org-roam' issues."
+  (interactive)
+  (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*org-roam diagnostics*"))
+    (erase-buffer)
+    (insert (propertize "Copy info below this line into issue:\n" 'face '(:weight bold)))
+    (insert (format "- Emacs: %s\n" (emacs-version)))
+    (insert (format "- Framework: %s\n"
+                    (condition-case _
+                        (completing-read "I'm using the following Emacs framework:"
+                                         '("Doom" "Spacemacs" "N/A" "I don't know"))
+                      (quit "N/A"))))
+    (insert (format "- Org: %s\n" (org-version nil 'full)))
+    (insert (format "- Org-roam: %s" (org-roam-version)))))
 
 (provide 'org-roam-utils)
 ;;; org-roam-utils.el ends here

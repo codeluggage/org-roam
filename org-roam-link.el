@@ -43,8 +43,6 @@
 
 (defvar org-roam-completion-ignore-case)
 (defvar org-roam-directory)
-(declare-function  org-roam-find-file                   "org-roam")
-(declare-function org-roam-format-link                  "org-roam")
 
 (defcustom org-roam-link-auto-replace t
   "When non-nil, replace Org-roam's roam links with file or id links whenever possible."
@@ -55,7 +53,7 @@
 (org-link-set-parameters "roam" :follow #'org-roam-link-follow-link)
 
 (defun org-roam-link-follow-link (path)
-  "Navigates to location in Org-roam link.
+  "Navigates to roam: link with description PATH.
 This function is called by Org when following links of the type
 `roam'. While the path is passed, assume that the cursor is on
 the link."
@@ -79,7 +77,7 @@ DESC is the link description."
                desc)))))
 
 (defun org-roam-link-locate ()
-  "Returns the location of the roam link at point.
+  "Return the location of the roam link at point.
 This is a list of three items: the node id, the file, and point
 in the file."
   (let ((context (org-element-context))
@@ -118,6 +116,7 @@ in the file."
    (mapcar #'car (org-roam-db-query [:select [alias] :from aliases]))))
 
 (defun org-roam-link--get-node-from-title (title)
+  "Return the node id for a given TITLE."
   (let ((nodes (seq-uniq
                 (append
                  (mapcar #'car (org-roam-db-query [:select [id] :from nodes

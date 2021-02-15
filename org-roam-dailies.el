@@ -69,51 +69,51 @@
                     :file-name "daily/%<%Y-%m-%d>"
                     :head "#+title: %<%Y-%m-%d>\n"
                     :unnarrowed t)
-      (list :tag "Multikey description"
-        (string :tag "Keys       ")
-        (string :tag "Description"))
-      (list :tag "Template entry"
-        (string :tag "Keys              ")
-        (string :tag "Description       ")
-        (choice :tag "Type              "
-         (const :tag "Plain" plain)
-         (const :tag "Entry (for creating headlines)" entry))
-        (const :format "" #'org-roam-capture--get-point)
-        (choice :tag "Template          "
-          (string :tag "String"
-                  :format "String:\n            \
+            (list :tag "Multikey description"
+                  (string :tag "Keys       ")
+                  (string :tag "Description"))
+            (list :tag "Template entry"
+                  (string :tag "Keys              ")
+                  (string :tag "Description       ")
+                  (choice :tag "Type              "
+                          (const :tag "Plain" plain)
+                          (const :tag "Entry (for creating headlines)" entry))
+                  (const :format "" #'org-roam-capture--get-point)
+                  (choice :tag "Template          "
+                          (string :tag "String"
+                                  :format "String:\n            \
 Template string   :\n%v")
-          (list :tag "File"
-            (const :format "" file)
-            (file :tag "Template file     "))
-          (list :tag "Function"
-            (const :format "" function)
-            (function :tag "Template function ")))
-        (const :format "File name format  :" :file-name)
-        (string :format " %v" :value "daily/%<%Y-%m-%d>")
-        (const :format "Header format     :" :head)
-        (string :format " %v" :value "#+title: ${title}\n")
-        (plist :inline t
-               :tag "Options"
-          ;; Give the most common options as checkboxes
-               :options
-               (((const :tag "Outline path" :olp)
-                 (repeat :tag "Headings"
-                   (string :tag "Heading")))
-                ((const :format "%v " :unnarrowed) (const t))
-                ((const :format "%v " :prepend) (const t))
-                ((const :format "%v " :immediate-finish) (const t))
-                ((const :format "%v " :jump-to-captured) (const t))
-                ((const :format "%v " :empty-lines) (const 1))
-                ((const :format "%v " :empty-lines-before) (const 1))
-                ((const :format "%v " :empty-lines-after) (const 1))
-                ((const :format "%v " :clock-in) (const t))
-                ((const :format "%v " :clock-keep) (const t))
-                ((const :format "%v " :clock-resume) (const t))
-                ((const :format "%v " :time-prompt) (const t))
-                ((const :format "%v " :tree-type) (const week))
-                ((const :format "%v " :table-line-pos) (string))
-                ((const :format "%v " :kill-buffer) (const t))))))))
+                          (list :tag "File"
+                                (const :format "" file)
+                                (file :tag "Template file     "))
+                          (list :tag "Function"
+                                (const :format "" function)
+                                (function :tag "Template function ")))
+                  (const :format "File name format  :" :file-name)
+                  (string :format " %v" :value "daily/%<%Y-%m-%d>")
+                  (const :format "Header format     :" :head)
+                  (string :format " %v" :value "#+title: ${title}\n")
+                  (plist :inline t
+                         :tag "Options"
+                         ;; Give the most common options as checkboxes
+                         :options
+                         (((const :tag "Outline path" :olp)
+                           (repeat :tag "Headings"
+                                   (string :tag "Heading")))
+                          ((const :format "%v " :unnarrowed) (const t))
+                          ((const :format "%v " :prepend) (const t))
+                          ((const :format "%v " :immediate-finish) (const t))
+                          ((const :format "%v " :jump-to-captured) (const t))
+                          ((const :format "%v " :empty-lines) (const 1))
+                          ((const :format "%v " :empty-lines-before) (const 1))
+                          ((const :format "%v " :empty-lines-after) (const 1))
+                          ((const :format "%v " :clock-in) (const t))
+                          ((const :format "%v " :clock-keep) (const t))
+                          ((const :format "%v " :clock-resume) (const t))
+                          ((const :format "%v " :time-prompt) (const t))
+                          ((const :format "%v " :tree-type) (const week))
+                          ((const :format "%v " :table-line-pos) (string))
+                          ((const :format "%v " :kill-buffer) (const t))))))))
 
 ;;;; Faces
 (defface org-roam-dailies-calendar-note
@@ -303,18 +303,18 @@ negative, find note N days in the past."
                             (string= (buffer-file-name (buffer-base-buffer)) candidate))
                           dailies))
          note)
-      (unless position
-        (user-error "Can't find current note file - have you saved it yet?"))
-      (pcase n
-        ((pred (natnump))
-         (when (eq position (- (length dailies) 1))
-           (user-error "Already at newest note")))
-        ((pred (integerp))
-         (when (eq position 0)
-             (user-error "Already at oldest note"))))
-      (setq note (nth (+ position n) dailies))
-      (find-file note)
-      (run-hooks 'org-roam-dailies-find-file-hook)))
+    (unless position
+      (user-error "Can't find current note file - have you saved it yet?"))
+    (pcase n
+      ((pred (natnump))
+       (when (eq position (- (length dailies) 1))
+         (user-error "Already at newest note")))
+      ((pred (integerp))
+       (when (eq position 0)
+         (user-error "Already at oldest note"))))
+    (setq note (nth (+ position n) dailies))
+    (find-file note)
+    (run-hooks 'org-roam-dailies-find-file-hook)))
 
 (defun org-roam-dailies-find-previous-note (&optional n)
   "Find previous daily-note.

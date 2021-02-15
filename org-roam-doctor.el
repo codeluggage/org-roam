@@ -77,78 +77,7 @@ processing multiple files"
     :description "Fix broken links."
     :actions '(("d" . ("Unlink" . org-roam-doctor--remove-link))
                ("r" . ("Replace link" . org-roam-doctor--replace-link))
-               ("R" . ("Replace link (keep label)" . org-roam-doctor--replace-link-keep-label))))
-   (make-org-roam-doctor-checker
-    :name 'org-roam-doctor-check-roam-props
-    :description "Check #+roam_* properties.")
-   (make-org-roam-doctor-checker
-    :name 'org-roam-doctor-check-tags
-    :description "Check #+roam_tags.")
-   (make-org-roam-doctor-checker
-    :name 'org-roam-doctor-check-alias
-    :description "Check #+roam_alias.")))
-
-(defconst org-roam-doctor--supported-roam-properties
-  '("roam_tags" "roam_alias" "roam_key")
-  "List of supported Org-roam properties.")
-
-(defun org-roam-doctor-check-roam-props (ast)
-  "Checker for detecting invalid #+roam_* properties.
-AST is the org-element parse tree."
-  (let (reports)
-    (org-element-map ast 'keyword
-      (lambda (kw)
-        (let ((key (org-element-property :key kw)))
-          (when (and (string-prefix-p "ROAM_" key t)
-                     (not (member (downcase key) org-roam-doctor--supported-roam-properties)))
-            (push
-             `(,(org-element-property :begin kw)
-               ,(concat "Possible mispelled key: "
-                        (prin1-to-string key)
-                        "\nOrg-roam supports the following keys: "
-                        (s-join ", " org-roam-doctor--supported-roam-properties)))
-             reports)))))
-    reports))
-
-(defun org-roam-doctor-check-tags (ast)
-  "Checker for detecting invalid #+roam_tags.
-AST is the org-element parse tree."
-  (let (reports)
-    (org-element-map ast 'keyword
-      (lambda (kw)
-        (when (string-collate-equalp (org-element-property :key kw) "roam_tags" nil t)
-          (let ((tags (org-element-property :value kw)))
-            (condition-case nil
-                (split-string-and-unquote tags)
-              (error
-               (push
-                `(,(org-element-property :begin kw)
-                  ,(concat "Unable to parse tags: "
-                           tags
-                           (when (s-contains? "," tags)
-                             "\nCheck that your tags are not comma-separated.")))
-                reports)))))))
-    reports))
-
-(defun org-roam-doctor-check-alias (ast)
-  "Checker for detecting invalid #+roam_alias.
-AST is the org-element parse tree."
-  (let (reports)
-    (org-element-map ast 'keyword
-      (lambda (kw)
-        (when (string-collate-equalp (org-element-property :key kw) "roam_alias" nil t)
-          (let ((aliases (org-element-property :value kw)))
-            (condition-case nil
-              (split-string-and-unquote aliases)
-              (error
-               (push
-                `(,(org-element-property :begin kw)
-                  ,(concat "Unable to parse aliases: "
-                           aliases
-                           (when (s-contains? "," aliases)
-                             "\nCheck that your aliases are not comma-separated.")))
-                reports)))))))
-    reports))
+               ("R" . ("Replace link (keep label)" . org-roam-doctor--replace-link-keep-label))))))
 
 (defun org-roam-doctor-broken-links (ast)
   "Checker for detecting broken links.
@@ -156,18 +85,12 @@ AST is the org-element parse tree."
   (let (reports)
     (org-element-map ast 'link
       (lambda (l)
-        (when (equal "file" (org-element-property :type l))
-          (let ((file (org-element-property :path l)))
-            (or (file-exists-p file)
-                (file-remote-p file)
-                (push
-                 `(,(org-element-property :begin l)
-                   ,(format (if (org-element-lineage l '(link))
-                                "Link to non-existent image file \"%s\"\
- in link description"
-                              "Link to non-existent local file \"%s\"")
-                            file))
-                 reports))))))
+        (when (equal "id" (org-element-property :type l))
+          (let ((id (org-element-property :path l)))
+            (unless (org-id-find id)
+              (push `(,(org-element-property :begin l)
+                      ,(format "Broken id link \"%s\"" id))
+                    reports))))))
     reports))
 
 (defun org-roam-doctor--check (buffer checkers)
@@ -301,6 +224,7 @@ If CHECKALL, run the check for all Org-roam files."
   (save-window-excursion
     (let ((existing-buffers (org-roam--get-roam-buffers))
           (org-inhibit-startup org-roam-doctor-inhibit-startup))
+      (org-id-update-id-locations)
       (dolist (f files)
         (let ((buf (find-file-noselect f)))
           (org-roam-doctor--check buf checkers)

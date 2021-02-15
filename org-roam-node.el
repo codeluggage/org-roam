@@ -4,7 +4,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 
@@ -78,6 +78,10 @@
    (end :initform nil)))
 
 ;;; Functions
+(defun org-roam-node-list ()
+  "Return list of all nodes."
+  (mapcar #'car (org-roam-db-query [:select [id] :from nodes])))
+
 (defun org-roam-node-backlinks (node)
   "Return the backlinks for NODE."
   (org-roam-db-query
@@ -96,7 +100,7 @@
 
 (defun org-roam-node-preview (file point)
   "Get preview content for FILE at POINT."
-  (org-roam--with-temp-buffer file
+  (org-roam-with-temp-buffer file
     (goto-char point)
     (let ((elem (org-element-at-point)))
       (or (org-element-property :raw-value elem)
@@ -191,10 +195,22 @@ window instead."
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
 
+;;;###autoload
+(defun org-roam-node-random (&optional other-window)
+  "Find a random Org-roam node.
+With prefix argument OTHER-WINDOW, visit the node in another
+window instead."
+  (interactive current-prefix-arg)
+  (org-roam-node-visit (seq-random-elt (org-roam-node-list))))
 
 ;;; Section inserter
-(cl-defun org-roam-node-insert-section (&key source source-file source-title pos dest dest-title props)
-  "Insert section for NODE."
+(cl-defun org-roam-node-insert-section (&key source source-file source-title pos _dest _dest-title props)
+  "Insert section for NODE.
+SOURCE is the node id.
+SOURCE-FILE is the file for the node.
+SOURCE-TITLE is the title of the source node.
+POS is the position in the file for the link to node.
+PROPS contains additional properties about the link."
   (magit-insert-section section (org-roam-node)
     (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
     (oset section node source)

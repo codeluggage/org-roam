@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -48,7 +48,7 @@
 (declare-function org-roam--org-roam-file-p                "org-roam")
 (declare-function org-roam--list-all-files                 "org-roam")
 (declare-function org-roam--file-name-extension            "org-roam")
-(declare-function org-roam-current-node                    "org-roam")
+(declare-function org-roam-node-at-point                    "org-roam-node")
 
 ;;;; Options
 (defcustom org-roam-db-location (expand-file-name "org-roam.db" user-emacs-directory)
@@ -143,29 +143,25 @@ SQL can be either the emacsql vector representation, or a string."
       (scheduled text)
       (deadline text)
       title]
-     (:foreign-key [file] :references files [file]
-      :on-delete :cascade))
+     (:foreign-key [file] :references files [file] :on-delete :cascade))
 
     (aliases
      [(file :not-null)
       (node-id :not-null)
       alias]
-     (:foreign-key [node-id] :references nodes [id]
-      :on-delete :cascade))
+     (:foreign-key [node-id] :references nodes [id] :on-delete :cascade))
 
     (refs
      ([(file :not-null)
        (node-id :not-null)
        ref]
-      (:foreign-key [node-id] :references nodes [id]
-       :on-delete :cascade)))
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
     (tags
      [(file :not-null)
       (node-id :not-null)
       tag]
-     (:foreign-key [node-id] :references nodes [id]
-      :on-delete :cascade))
+     (:foreign-key [node-id] :references nodes [id] :on-delete :cascade))
 
     (links
      [(file :not-null)
@@ -174,8 +170,7 @@ SQL can be either the emacsql vector representation, or a string."
       (dest :not-null)
       (type :not-null)
       (properties :not-null)]
-     (:foreign-key [file] :references files [file]
-      :on-delete :cascade))))
+     (:foreign-key [file] :references files [file] :on-delete :cascade))))
 
 (defun org-roam-db--init (db)
   "Initialize database DB with the correct schema and user version."
@@ -416,7 +411,9 @@ connections, nil is returned."
                    connected_component(file, trace) AS
                      (VALUES($s1, json_array($s1))
                       UNION
-                      SELECT lo.link, json_insert(cc.trace, '$[' || json_array_length(cc.trace) || ']', lo.link) FROM
+                      SELECT lo.link,
+                        json_insert(cc.trace, '$[' || json_array_length(cc.trace) || ']', lo.link)
+                      FROM
                       connected_component AS cc JOIN links_of AS lo USING(file)
                       WHERE (
                         -- Avoid cycles by only visiting each file once.
@@ -459,7 +456,7 @@ If FORCE, force a rebuild of the cache from scratch."
           (push file modified-files)))
       (remhash file current-files))
     (dolist-with-progress-reporter (file (hash-table-keys current-files))
-      "Clearing removed files..."
+        "Clearing removed files..."
       (org-roam-db-clear-file file))
     (dolist-with-progress-reporter (file modified-files)
         "Processing modified files..."
@@ -472,7 +469,7 @@ If the file exists, update the cache with information."
   (setq file-path (or file-path (buffer-file-name (buffer-base-buffer))))
   (let ((content-hash (org-roam-db--file-hash file-path))
         (db-hash (caar (org-roam-db-query [:select hash :from files
-                              :where (= file $s1)] file-path))))
+                                           :where (= file $s1)] file-path))))
     (unless (string= content-hash db-hash)
       (org-roam-with-file file-path nil
         (save-excursion
@@ -490,7 +487,7 @@ If the file exists, update the cache with information."
 (defun org-roam-db-diagnose-node ()
   "Print information about node at point."
   (interactive)
-  (let* ((node (org-roam-current-node))
+  (let* ((node (org-roam-node-at-point))
          (aliases (org-roam-db-query [:select [alias] :from aliases
                                       :where (= node_id $s1)]
                                      node))
