@@ -706,12 +706,6 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
              (not (org-roam-capture-p)))
     (org-roam-db-update-file)))
 
-;;; Visiting functions
-;;;; File
-
-;;;; olp
-
-;;;; preview
 ;;; Interactive Commands
 ;;;###autoload
 (defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)

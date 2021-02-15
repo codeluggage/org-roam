@@ -32,6 +32,8 @@
 ;;; Code:
 (require 'magit-section)
 
+(defvar org-roam-directory)
+
 ;;; Faces
 (defface org-roam-header-line
   `((((class color) (background light))

@@ -14,7 +14,7 @@
 #+property: header-args :eval never
 #+texinfo: @noindent
 
-This manual is for Org-roam version 1.2.3.
+This manual is for Org-roam version 2.0.0.
 
 #+BEGIN_QUOTE
 Copyright (C) 2020-2021 Jethro Kuan <jethrokuan95@gmail.com>
