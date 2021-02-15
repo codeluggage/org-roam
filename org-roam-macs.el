@@ -54,10 +54,10 @@ Kills the buffer if KEEP-BUF-P is nil, and FILE is not yet visited."
          (kill-buffer (find-buffer-visiting ,file))))
      res))
 
-(defmacro org-roam--with-temp-buffer (file &rest body)
+(defmacro org-roam-with-temp-buffer (file &rest body)
   "Execute BODY within a temp buffer.
 Like `with-temp-buffer', but propagates `org-roam-directory'.
-If FILE, set `org-roam-temp-file-name' to file and insert its contents."
+If FILE, set `default-directory' to FILE's directory and insert its contents."
   (declare (indent 1) (debug t))
   (let ((current-org-roam-directory (make-symbol "current-org-roam-directory")))
     `(let ((,current-org-roam-directory org-roam-directory))

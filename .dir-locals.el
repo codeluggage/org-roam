@@ -4,7 +4,7 @@
   (elisp-lint-ignored-validators . ("byte-compile" "package-lint"))
   (elisp-lint-indent-specs . ((describe . 1)
                               (it . 1)
-                              (org-roam--with-temp-buffer . 1)
+                              (org-roam-with-temp-buffer . 1)
                               (org-with-point-at . 1)
                               (magit-insert-section . defun)
                               (magit-section-case . 0)

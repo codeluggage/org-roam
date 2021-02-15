@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -163,7 +163,7 @@ If WRAP-VAL is non-nil it wraps the VAL."
 The Org-roam database titles table is read, to obtain the list of titles.
 The links table is then read to obtain all directed links, and formatted
 into a digraph."
-  (org-roam--with-temp-buffer nil
+  (org-roam-with-temp-buffer nil
     (let* ((nodes (org-roam-db-query node-query))
            (edges-query
             `[:with selected :as [:select [file] :from ,node-query]
