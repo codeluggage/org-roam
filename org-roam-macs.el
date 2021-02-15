@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -27,31 +27,9 @@
 
 ;;; Commentary:
 ;;
-;; This library implements macros and utility functions used throughout
-;; org-roam.
-;;
+;; This library implements macros used throughout org-roam.
 ;;
 ;;; Code:
-;;;; Library Requires
-(require 'dash)
-(require 's)
-
-(defvar org-roam-verbose)
-
-;; This is necessary to ensure all dependents on this module see
-;; `org-mode-hook' and `org-inhibit-startup' as dynamic variables,
-;; regardless of whether Org is loaded before their compilation.
-(require 'org)
-
-;;;; Utility Functions
-(defun org-roam--list-interleave (lst separator)
-  "Interleaves elements in LST with SEPARATOR."
-  (when lst
-    (let ((new-lst (list (pop lst))))
-      (dolist (it lst)
-        (nconc new-lst (list separator it)))
-      new-lst)))
-
 (defmacro org-roam-with-file (file keep-buf-p &rest body)
   "Execute BODY within FILE.
 If FILE is nil, execute BODY in the current buffer.
@@ -63,7 +41,7 @@ Kills the buffer if KEEP-BUF-P is nil, and FILE is not yet visited."
                    (find-buffer-visiting ,file) ; If FILE is already visited, find buffer
                    (progn
                      (setq new-buf t)
-                     (find-file-noselect ,file nil t)))) ; Else, visit FILE and return buffer
+                     (find-file-noselect ,file)))) ; Else, visit FILE and return buffer
           res)
      (with-current-buffer buf
        (unless (equal major-mode 'org-mode)
@@ -90,48 +68,6 @@ If FILE, set `org-roam-temp-file-name' to file and insert its contents."
              (insert-file-contents ,file)
              (setq-local default-directory (file-name-directory ,file)))
            ,@body)))))
-
-(defun org-roam-message (format-string &rest args)
-  "Pass FORMAT-STRING and ARGS to `message' when `org-roam-verbose' is t."
-  (when org-roam-verbose
-    (apply #'message `(,(concat "(org-roam) " format-string) ,@args))))
-
-(defun org-roam-string-quote (str)
-  "Quote STR."
-  (->> str
-       (s-replace "\\" "\\\\")
-       (s-replace "\"" "\\\"")))
-
-(defun org-roam-set-header-line-format (string)
-  "Set the header-line using STRING.
-If the `face' property of any part of STRING is already set, then
-that takes precedence. Also pad the left side of STRING so that
-it aligns with the text area."
-  (setq-local header-line-format
-        (concat (propertize " " 'display '(space :align-to 0))
-                string)))
-
-;;; Shielding regions
-(defun org-roam-shield-region (beg end)
-  "Shield REGION against modifications.
-REGION must be a cons-cell containing the marker to the region
-beginning and maximum values."
-  (when (and beg end)
-    (add-text-properties beg end
-                           '(font-lock-face org-roam-link-shielded
-                                            read-only t)
-                           (marker-buffer beg))
-    (cons beg end)))
-
-(defun org-roam-unshield-region (beg end)
-  "Unshield the shielded REGION."
-  (when (and beg end)
-    (let ((inhibit-read-only t))
-      (remove-text-properties beg end
-                              '(font-lock-face org-roam-link-shielded
-                                               read-only t)
-                              (marker-buffer beg)))
-    (cons beg end)))
 
 (provide 'org-roam-macs)
 

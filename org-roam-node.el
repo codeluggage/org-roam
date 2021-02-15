@@ -33,9 +33,9 @@
 ;;;; Library Requires
 (require 'eieio)
 (require 'magit-section)
-(require 'org-roam-mode)
 
 (defvar org-roam-mode-sections)
+(defvar org-roam-mode-map)
 
 ;;; Section
 ;;;; Definition
@@ -109,7 +109,13 @@
   "Return the node at point.
 If ASSERT, throw an error."
   (if-let ((node (magit-section-case
-                   (org-roam-node (oref it node)))))
+                   (org-roam-node (oref it node))
+                   (t (let (id)
+                        (org-with-wide-buffer
+                         (while (and (not (setq id (org-id-get)))
+                                     (not (bobp)))
+                           (org-up-heading-or-point-min))
+                         id))))))
       node
     (when assert
       (user-error "No node at point"))))
@@ -187,41 +193,30 @@ window instead."
 
 
 ;;; Section inserter
-;;;; TODO: Move to own backlinks widget
-(cl-defun org-roam-node-insert-section (&key node _file)
+(cl-defun org-roam-node-insert-section (&key source source-file source-title pos dest dest-title props)
   "Insert section for NODE."
-  (when t                               ; TODO: whether to show backlinks
-    (let* ((backlinks (seq-group-by #'car (org-roam-node-backlinks node)))
-           source values)
-      (magit-insert-section (backlinks-section)
-        (magit-insert-heading "Backlinks:")
-        (dolist (backlink backlinks)
-          (setq source (car backlink)
-                values (cdr backlink))
-          (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
-            (magit-insert-section section (org-roam-node)
-              (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
-              (oset section node source)
-              (let ((outline (plist-get props :outline)))
-                (magit-insert-section section (org-roam-olp)
-                  (insert (propertize
-                           (concat
-                            (if outline
-                                (string-join (mapcar #'org-link-display-format outline)
-                                             " > ")
-                              "Top Level")
-                            "\n")
-                           'font-lock-face 'org-roam-preview-heading))
-                  (magit-insert-heading)
-                  (oset section file source-file)
-                  (oset section olp outline)
-                  (magit-insert-section section (org-roam-preview)
-                    (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview source-file pos)))
-                      (insert (org-fontify-like-in-org-mode s) "\n")
-                      (oset section file source-file)
-                      (oset section begin begin)
-                      (oset section end end))))))))
-        (insert ?\n)))))
+  (magit-insert-section section (org-roam-node)
+    (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
+    (oset section node source)
+    (let ((outline (plist-get props :outline)))
+      (magit-insert-section section (org-roam-olp)
+        (insert (propertize
+                 (concat
+                  (if outline
+                      (string-join (mapcar #'org-link-display-format outline)
+                                   " > ")
+                    "Top Level")
+                  "\n")
+                 'font-lock-face 'org-roam-preview-heading))
+        (magit-insert-heading)
+        (oset section file source-file)
+        (oset section olp outline)
+        (magit-insert-section section (org-roam-preview)
+          (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview source-file pos)))
+            (insert (org-fontify-like-in-org-mode s) "\n")
+            (oset section file source-file)
+            (oset section begin begin)
+            (oset section end end)))))))
 
 (provide 'org-roam-node)
 ;;; org-roam-node.el ends here

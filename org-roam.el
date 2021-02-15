@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -49,13 +49,14 @@
 
 ;;;; Features
 (require 'org-roam-compat)
-(require 'org-roam-macs)
+(eval-when-compile
+  (require 'org-roam-macs))
+(require 'org-roam-utils)
 ;; These features should be able to be loaded order independently.
 ;; @TODO: implement something akin to `org-modules' that allows
 ;; selectively loading different sets of features.
 ;; ~NV [2020-05-22 Fri]
 
-(require 'org-roam-faces)
 (require 'org-roam-mode)
 (require 'org-roam-completion)
 (require 'org-roam-capture)
@@ -73,7 +74,7 @@
 (defvar org-id-link-to-org-use-id)
 (declare-function org-id-find-id-in-file "ext:org-id" (id file &optional markerp))
 
-;;;; Customizable variables
+;;; Customizations
 (defgroup org-roam nil
   "Roam Research replica in Org-mode."
   :group 'org
@@ -81,6 +82,12 @@
   :link '(url-link :tag "Github" "https://github.com/org-roam/org-roam")
   :link '(url-link :tag "Online Manual" "https://www.orgroam.com/manual.html"))
 
+(defgroup org-roam-faces nil
+  "Faces used by Org-roam."
+  :group 'org-roam
+  :group 'faces)
+
+;;;; Variables
 (defcustom org-roam-directory (expand-file-name "~/org-roam/")
   "Default path to Org-roam files.
 All Org files, at any level of nesting, are considered part of the Org-roam."
@@ -113,19 +120,6 @@ ensure that."
 Note that this only affects interactive calls.
 See `org-roam--get-ref-path-completions' for details."
   :type 'boolean
-  :group 'org-roam)
-
-(defcustom org-roam-index-file "index.org"
-  "Path to the Org-roam index file.
-The path can be a string or a function.  If it is a string, it
-should be the path (absolute or relative to `org-roam-directory')
-to the index file.  If it is is a function, the function should
-return the path to the index file.  Otherwise, the index is
-assumed to be a note in `org-roam-directory' whose title is
-'Index'."
-  :type '(choice
-          (string :tag "Path to index" "%s")
-          (function :tag "Function to generate the path"))
   :group 'org-roam)
 
 (defcustom org-roam-link-title-format "%s"
@@ -202,6 +196,14 @@ Function should return a filename string based on title."
 (defvar org-roam-completion-functions nil
   "List of functions to be used with `completion-at-point' for Org-roam.")
 
+;;;; Faces
+(defface org-roam-shielded
+  '((t :inherit (warning org-link)))
+  "Face for Org-roam links that are shielded.
+This face is used on the region target by `org-roam-insertion'
+during an `org-roam-capture'."
+  :group 'org-roam-faces)
+
 ;;;; Dynamic variables
 (defvar org-roam-last-window nil
   "Last window `org-roam' was called from.")
@@ -215,15 +217,6 @@ Function should return a filename string based on title."
             (val (pop plist)))
         (push (cons prop val) res)))
     res))
-
-(defun org-roam-current-node ()
-  "Return the current node at point, or nil if not a node."
-  (let (id)
-    (org-with-wide-buffer
-     (while (and (not (setq id (org-id-get)))
-                 (not (bobp)))
-       (org-up-heading-or-point-min))
-     id)))
 
 (defun org-roam--url-p (path)
   "Check if PATH is a URL.
@@ -476,20 +469,6 @@ is a plist containing the properties of the node."
         (push (cons alias
                     (list :path file-path :title alias :point pos :id id :tags tags))
               completions)))))
-
-(defun org-roam--get-index-path ()
-  "Return the path to the index in `org-roam-directory'.
-The path to the index can be defined in `org-roam-index-file'.
-Otherwise, it is assumed to be a note in `org-roam-directory'
-whose title is 'Index'."
-  (let ((path (pcase org-roam-index-file
-                ((pred functionp) (funcall org-roam-index-file))
-                ((pred stringp) org-roam-index-file)
-                ('nil (user-error "You need to set `org-roam-index-file' before you can jump to it"))
-                (wrong-type (signal 'wrong-type-argument
-                                    `((functionp stringp)
-                                      ,wrong-type))))))
-    (expand-file-name path org-roam-directory)))
 
 ;;;; org-roam-find-ref
 (defun org-roam--get-ref-path-completions (&optional arg filter)
@@ -850,21 +829,6 @@ If DESCRIPTION is provided, use this as the link label."
                    (org-roam-capture--capture))))
           res))
     (deactivate-mark)))
-
-;;;###autoload
-(defun org-roam-jump-to-index ()
-  "Find the index file in `org-roam-directory'.
-The path to the index can be defined in `org-roam-index-file'.
-Otherwise, the function will look in your `org-roam-directory'
-for a note whose title is 'Index'.  If it does not exist, the
-command will offer you to create one."
-  (interactive)
-  (let ((index (org-roam--get-index-path)))
-    (if (and index
-             (file-exists-p index))
-        (find-file index)
-      (when (y-or-n-p "Index file does not exist.  Would you like to create it? ")
-        (org-roam-find-file "Index")))))
 
 ;;; Diagnostics
 ;;;###autoload

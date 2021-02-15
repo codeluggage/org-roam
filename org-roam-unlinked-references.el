@@ -32,9 +32,9 @@
 ;;;; Library Requires
 (require 'eieio)
 (require 'magit-section)
-(require 'org-roam-mode)
 
 (defvar org-roam-mode-sections)
+(defvar org-roam-mode-map)
 
 ;;; Section
 ;;;; Faces

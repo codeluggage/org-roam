@@ -109,10 +109,10 @@ and `:slant'."
   :group 'org-roam-faces)
 
 ;;; Variables
-(defvar org-roam-mode-sections
-  (list #'org-roam-node-insert-section
-        #'org-roam-unlinked-references-insert-section)
+;; TODO: make defcustom
+(defvar org-roam-mode-sections nil
   "List of functions that insert sections for Org-roam.")
+
 ;;; The mode
 (defvar org-roam-mode-map
   (let ((map (make-sparse-keymap)))
@@ -144,7 +144,7 @@ which visits the thing at point."
         (buffer (get-buffer-create
                  (concat "org-roam: "
                          (file-relative-name (buffer-file-name) org-roam-directory))))
-        (node (org-roam-current-node)))
+        (node (org-roam-node-at-point)))
     (with-current-buffer buffer
       (let ((inhibit-read-only t))
         (erase-buffer)

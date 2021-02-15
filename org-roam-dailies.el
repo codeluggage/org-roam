@@ -7,7 +7,7 @@
 ;; 	Leo Vivier <leo.vivier+dev@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 1.2.3
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (s "1.12.0") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -114,6 +114,12 @@ Template string   :\n%v")
                 ((const :format "%v " :tree-type) (const week))
                 ((const :format "%v " :table-line-pos) (string))
                 ((const :format "%v " :kill-buffer) (const t))))))))
+
+;;;; Faces
+(defface org-roam-dailies-calendar-note
+  '((t :inherit (org-roam-link) :underline nil))
+  "Face for dates with a daily-note in the calendar"
+  :group 'org-roam-faces)
 
 ;;;; Utilities
 (defun org-roam-dailies-directory--get-absolute-path ()

@@ -1,14 +1,14 @@
 #+title: Org-roam User Manual
 #+author: Jethro Kuan
 #+email: jethrokuan95@gmail.com
-#+date: 2020-2020
+#+date: 2020-2021
 #+language: en
 
 #+texinfo_deffn: t
 #+texinfo_dir_category: Emacs
 #+texinfo_dir_title: Org-roam: (org-roam).
 #+texinfo_dir_desc: Rudimentary Roam Replica for Emacs.
-#+subtitle: for version 1.2.3
+#+subtitle: for version 2.0.0
 
 #+options: H:4 num:3 toc:nil creator:t ':t
 #+property: header-args :eval never
@@ -17,7 +17,7 @@
 This manual is for Org-roam version 1.2.3.
 
 #+BEGIN_QUOTE
-Copyright (C) 2020-2020 Jethro Kuan <jethrokuan95@gmail.com>
+Copyright (C) 2020-2021 Jethro Kuan <jethrokuan95@gmail.com>
 
 You can redistribute this document and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation, either
