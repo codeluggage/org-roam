@@ -8,11 +8,11 @@ prepare:
 
 .PHONY: lint
 lint:
-	eldev -C --unstable -p -dtT lint
+	eldev -C --unstable -T lint
 
 .PHONY: test
 test:
-	eldev -C --unstable -p -dtT test
+	eldev -C --unstable -T test
 
 docs:
 	make -C doc all
