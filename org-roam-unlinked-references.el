@@ -30,7 +30,6 @@
 ;;
 ;;; Code:
 ;;;; Library Requires
-(require 'eieio)
 (require 'magit-section)
 
 (defvar org-roam-mode-sections)

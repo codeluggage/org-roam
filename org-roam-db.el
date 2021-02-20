@@ -279,7 +279,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (level 0)
           (aliases (org-entry-get (point) "ROAM_ALIASES"))
           (tags (org-entry-get (point) "ROAM_TAGS"))
-          (aliases (org-entry-get (point) "ROAM_REFS")))
+          (refs (org-entry-get (point) "ROAM_REFS")))
       (org-roam-db-query
        [:insert :into nodes
         :values $v1]
@@ -298,7 +298,14 @@ If UPDATE-P is non-nil, first remove the file in the database."
           :values $v1]
          (mapcar (lambda (alias)
                    (vector file id alias))
-                 (split-string-and-unquote aliases)))))))
+                 (split-string-and-unquote aliases))))
+      (when refs
+        (org-roam-db-query
+         [:insert :into refs
+          :values $v1]
+         (mapcar (lambda (ref)
+                   (vector file id ref))
+                 (split-string-and-unquote refs)))))))
 
 (defun org-roam-db-insert-node-data ()
   "Insert node data for headline at point into the Org-roam cache."

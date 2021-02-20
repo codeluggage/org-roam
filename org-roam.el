@@ -380,22 +380,6 @@ backlinks."
            (slug (-reduce-from #'cl-replace (strip-nonspacing-marks title) pairs)))
       (downcase slug))))
 
-(defun org-roam--add-tag-string (str tags)
-  "Add TAGS to STR.
-
-Depending on the value of `org-roam-file-completion-tag-position', this function
-prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
-  (pcase org-roam-file-completion-tag-position
-    ('prepend (concat
-               (when tags (propertize (format "(%s) " (s-join org-roam-tag-separator tags))
-                                      'face 'org-roam-tag))
-               str))
-    ('append (concat
-              str
-              (when tags (propertize (format " (%s)" (s-join org-roam-tag-separator tags))
-                                     'face 'org-roam-tag))))
-    ('omit str)))
-
 (defun org-roam--tags-table ()
   "Return a hash table of node ID to list of tags."
   (let ((ht (make-hash-table :test #'equal)))
