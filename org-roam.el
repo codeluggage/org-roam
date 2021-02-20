@@ -535,58 +535,5 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
   (interactive)
   (find-file org-roam-directory))
 
-;;;###autoload
-(defun org-roam-insert (&optional lowercase completions filter-fn description link-type)
-  "Find an Org-roam file, and insert a relative org link to it at point.
-Return selected file if it exists.
-If LOWERCASE is non-nil, downcase the link description.
-LINK-TYPE is the type of link to be created. It defaults to \"file\".
-COMPLETIONS is a list of completions to be used instead of
-`org-roam--node-completions'.
-FILTER-FN is the name of a function to apply on the candidates
-which takes as its argument an alist of path-completions.
-If DESCRIPTION is provided, use this as the link label."
-  (interactive "P")
-  ;; Deactivate the mark on quit since `atomic-change-group' prevents it
-  (unwind-protect
-      ;; Group functions together to avoid inconsistent state on quit
-      (atomic-change-group
-        (let* (region-text
-               beg end
-               (_ (when (region-active-p)
-                    (setq beg (set-marker (make-marker) (region-beginning)))
-                    (setq end (set-marker (make-marker) (region-end)))
-                    (setq region-text (org-link-display-format (buffer-substring-no-properties beg end)))))
-               (node (org-roam-node-read region-text filter-fn))
-               (node-meta (get-text-property 0 'meta node))
-               (target-id (plist-get node-meta :id))
-               (target-file (plist-get node-meta :path))
-               (description (or description region-text node))
-               (description (if lowercase
-                                (downcase description)
-                              description)))
-          (cond ((and target-id (file-exists-p target-file))
-                 (when region-text
-                   (delete-region beg end)
-                   (set-marker beg nil)
-                   (set-marker end nil))
-                 (insert (org-link-make-string (concat "id:" target-id)
-                                               description)))
-                (t
-                 (let ((org-roam-capture--info
-                        `((title . ,title-with-tags)
-                          (slug . ,(funcall org-roam-title-to-slug-function node))))
-                       (org-roam-capture--context 'title))
-                   (setq org-roam-capture-additional-template-props
-                         (list :region (when (and beg end)
-                                         (cons beg end))
-                               :insert-at (point-marker)
-                               :link-type link-type
-                               :link-description description
-                               :finalize 'insert-link))
-                   (org-roam-capture--capture))))
-          node))
-    (deactivate-mark)))
-
 (provide 'org-roam)
 ;;; org-roam.el ends here

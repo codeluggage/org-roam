@@ -49,7 +49,7 @@
     map)
   "Keymap for Org-roam grep result sections.")
 
-(defclass org-roam-grep (magit-section)
+(defclass org-roam-grep-section (magit-section)
   ((keymap :initform org-roam-grep-map)
    (file :initform nil)
    (row :initform nil)
@@ -61,9 +61,9 @@
   "Return the file at point.
 If ASSERT, throw an error."
   (if-let ((file (magit-section-case
-                   (org-roam-grep (oref it file))
-                   (org-roam-olp (oref it file))
-                   (org-roam-preview (oref it file)))))
+                   (org-roam-grep-section (oref it file))
+                   (org-roam-olp-section (oref it file))
+                   (org-roam-preview-section (oref it file)))))
       file
     (when assert
       (user-error "No file at point"))))
@@ -151,7 +151,7 @@ References from FILE are excluded."
               (when (and match
                          (not (f-equal-p file f))
                          (member (downcase match) (mapcar #'downcase titles)))
-                (magit-insert-section section (org-roam-grep)
+                (magit-insert-section section (org-roam-grep-section)
                   (oset section file f)
                   (oset section row row)
                   (oset section col col)

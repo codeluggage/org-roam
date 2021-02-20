@@ -36,6 +36,10 @@
 
 (defvar org-roam-mode-sections)
 (defvar org-roam-mode-map)
+;;; Node Struct
+(cl-defstruct (org-roam-node (:constructor org-roam-node-create)
+                             (:copier nil))
+  id file level point todo priority scheduled deadline title tags)
 
 ;;; Section
 ;;;; Definition
@@ -46,7 +50,7 @@
     map)
   "Keymap for Org-roam node sections.")
 
-(defclass org-roam-node (magit-section)
+(defclass org-roam-node-section (magit-section)
   ((keymap :initform org-roam-node-map)
    (node :initform nil)))
 
@@ -65,13 +69,13 @@
     map)
   "Keymap for Org-roam preview.")
 
-(defclass org-roam-olp (magit-section)
+(defclass org-roam-olp-section (magit-section)
   ((keymap :initform org-roam-olp-map)
    (file :initform nil)
    (olp :initform nil)
    (heading-highlight-face :initform org-roam-preview-heading-highlight)))
 
-(defclass org-roam-preview (magit-section)
+(defclass org-roam-preview-section (magit-section)
   ((keymap :initform org-roam-preview-map)
    (file :initform nil)
    (begin :initform nil)
@@ -113,7 +117,7 @@
   "Return the node at point.
 If ASSERT, throw an error."
   (if-let ((node (magit-section-case
-                   (org-roam-node (oref it node))
+                   (org-roam-node-section (oref it node))
                    (t (let (id)
                         (org-with-wide-buffer
                          (while (and (not (setq id (org-id-get)))
@@ -163,19 +167,26 @@ is a plist containing the properties of the node."
     (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
         (let* ((tags (gethash id tag-table))
-               (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
-          (push (cons s s) completions))))
+               (s (propertize title 'meta (list :file file-path :title title :point pos :id id :tags tags)))
+               (node (org-roam-node-create :id id
+                                           :file file-path
+                                           :title title
+                                           :point pos
+                                           :tags tags)))
+          (push (cons s node) completions))))
     (dolist (row alias-rows completions)
       (pcase-let ((`(,file-path ,id ,alias ,pos) row))
-        (let* ((tags (tags (gethash id tag-table)))
-               (s (propertize alias 'meta (list :path file-path :title title :point pos :id id :tags tags))))
-          (push (cons s s) completions))))))
+        (let* ((tags (gethash id tag-table))
+               (s (propertize alias 'meta (list :file file-path :title alias :point pos :id id :tags tags)))
+               (node (org-roam-node-create :id id
+                                           :file file-path
+                                           :title alias
+                                           :point pos
+                                           :tags tags)))
+          (push (cons s node) completions))))))
 
 (defun org-roam-node-read (&optional initial-input filter-fn)
-  "Read an Org-roam node.
-Return a string, which is propertized in `meta' with the node
-properties if it is a match, or a plain string with the prompt
-otherwise.
+  "Read and return an `org-roam-node'.
 INITIAL-INPUT is the initial prompt value.
 FILTER-FN is a function applied to the completion list."
   (let* ((nodes (org-roam-node--completions))
@@ -189,7 +200,7 @@ FILTER-FN is a function applied to the completion list."
                                     (complete-with-action action nodes string pred)))
                                 nil nil initial-input)))
     (or (cdr (assoc node nodes))
-        node)))
+        (org-roam-node-create :title node))))
 
 (defun org-roam-node--annotation (node-title)
   "Return the annotation string for a NODE-TITLE."
@@ -203,7 +214,7 @@ FILTER-FN is a function applied to the completion list."
   "Return the olp at point.
 If ASSERT, throw an error."
   (magit-section-case
-    (org-roam-olp (oref it olp))
+    (org-roam-olp-section (oref it olp))
     (t (when assert
          (user-error "No olp at point")))))
 
@@ -251,11 +262,11 @@ SOURCE-FILE is the file for the node.
 SOURCE-TITLE is the title of the source node.
 POS is the position in the file for the link to node.
 PROPS contains additional properties about the link."
-  (magit-insert-section section (org-roam-node)
+  (magit-insert-section section (org-roam-node-section)
     (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
     (oset section node source)
     (let ((outline (plist-get props :outline)))
-      (magit-insert-section section (org-roam-olp)
+      (magit-insert-section section (org-roam-olp-section)
         (insert (propertize
                  (concat
                   (if outline
@@ -267,7 +278,7 @@ PROPS contains additional properties about the link."
         (magit-insert-heading)
         (oset section file source-file)
         (oset section olp outline)
-        (magit-insert-section section (org-roam-preview)
+        (magit-insert-section section (org-roam-preview-section)
           (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview source-file pos)))
             (insert (org-fontify-like-in-org-mode s) "\n")
             (oset section file source-file)
@@ -283,17 +294,60 @@ FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions.
 If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
   (interactive)
-  (let* ((node (org-roam-node-read initial-input filter-fn))
-         (node-meta (get-text-property 0 'meta node)))
-    (if node-meta                          ; node exists
+  (let ((node (org-roam-node-read initial-input filter-fn)))
+    (if (org-roam-node-file node)
         (progn
-          (find-file (plist-get node-meta :path))
-          (goto-char (plist-get node-meta :point)))
-      (let ((org-roam-capture--info `((title . ,node)
+          (find-file (org-roam-node-file node))
+          (goto-char (org-roam-node-point node)))
+      (let ((org-roam-capture--info `((title . (org-roam-node-title node))
                                       (slug  . ,(funcall org-roam-title-to-slug-function node))))
             (org-roam-capture--context 'title))
         (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
         (org-roam-capture--capture)))))
+
+(defun org-roam-node-insert (&optional completionsn filter-fn)
+  "Find an Org-roam file, and insert a relative org link to it at point.
+Return selected file if it exists.
+If LOWERCASE is non-nil, downcase the link description.
+COMPLETIONS is a list of completions to be used instead of
+`org-roam--node-completions'.
+FILTER-FN is the name of a function to apply on the candidates
+which takes as its argument an alist of path-completions."
+  (interactive)
+  ;; Deactivate the mark on quit since `atomic-change-group' prevents it
+  (unwind-protect
+      ;; Group functions together to avoid inconsistent state on quit
+      (atomic-change-group
+        (let* (region-text
+               beg end
+               (_ (when (region-active-p)
+                    (setq beg (set-marker (make-marker) (region-beginning)))
+                    (setq end (set-marker (make-marker) (region-end)))
+                    (setq region-text (org-link-display-format (buffer-substring-no-properties beg end)))))
+               (node (org-roam-node-read region-text filter-fn))
+               (description (or region-text
+                                (org-roam-node-title node))))
+          (if (org-roam-node-id node)
+              (progn
+                (when region-text
+                   (delete-region beg end)
+                   (set-marker beg nil)
+                   (set-marker end nil))
+                (insert (org-link-make-string
+                         (concat "id:" (org-roam-node-id node))
+                         description)))
+            (let ((org-roam-capture--info
+                        `((title . ,title-with-tags)
+                          (slug . ,(funcall org-roam-title-to-slug-function node))))
+                       (org-roam-capture--context 'title))
+                   (setq org-roam-capture-additional-template-props
+                         (list :region (when (and beg end)
+                                         (cons beg end))
+                               :insert-at (point-marker)
+                               :link-description description
+                               :finalize 'insert-link))
+                   (org-roam-capture--capture)))))
+    (deactivate-mark)))
 
 ;;;###autoload
 (defun org-roam-node-random (&optional other-window)
