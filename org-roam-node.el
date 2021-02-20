@@ -150,6 +150,33 @@ instead."
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
 
+(defun org-roam-node-read (&optional initial-input filter-fn)
+  "Read an Org-roam node.
+Return a string, which is propertized in `meta' with the node
+properties if it is a match, or a plain string with the prompt
+otherwise."
+  (let* ((nodes (org-roam--node-completions))
+         (nodes (if filter-fn
+                    (funcall filter-fn nodes)
+                  nodes))
+         (node (completing-read "Node: "
+                                (lambda (string pred action)
+                                  (if (eq action 'metadata)
+                                      '(metadata
+                                        (annotation-function . org-roam-node--annotation)
+                                        (category . org-roam-node))
+                                    (complete-with-action action nodes string pred)))
+                                nil nil initial-input)))
+    (or (cdr (assoc node nodes))
+        node)))
+
+(defun org-roam-node--annotation (node-title)
+  "Return the annotation string for a NODE-TITLE."
+  (let* ((meta (get-text-property 0 'meta node-title))
+         (tags (plist-get meta :tags)))
+    (when tags
+      (format " (%s)" (string-join tags ", ")))))
+
 ;; TODO: move to own file
 (defun org-roam-olp-at-point (&optional assert)
   "Return the olp at point.

@@ -209,15 +209,6 @@ during an `org-roam-capture'."
   "Last window `org-roam' was called from.")
 
 ;;;; Utilities
-(defun org-roam--plist-to-alist (plist)
-  "Return an alist of the property-value pairs in PLIST."
-  (let (res)
-    (while plist
-      (let ((prop (intern (substring (symbol-name (pop plist)) 1 nil)))
-            (val (pop plist)))
-        (push (cons prop val) res)))
-    res))
-
 (defun org-roam--url-p (path)
   "Check if PATH is a URL.
 Assume the protocol is not present in PATH; e.g. URL `https://google.com' is
@@ -457,18 +448,14 @@ is a plist containing the properties of the node."
          completions tags)
     (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
-        (when-let ((tags (gethash id tag-table)))
-          (setq title (org-roam--add-tag-string title tags)))
-        (push (cons title
-                    (list :path file-path :title title :point pos :id id :tags tags))
-              completions)))
+        (let* ((tags (gethash id tag-table))
+              (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
+          (push (cons s s) completions))))
     (dolist (row alias-rows completions)
       (pcase-let ((`(,file-path ,id ,alias ,pos) row))
-        (when-let ((tags (gethash id tag-table)))
-          (setq alias (org-roam--add-tag-string alias tags)))
-        (push (cons alias
-                    (list :path file-path :title alias :point pos :id id :tags tags))
-              completions)))))
+        (let* ((tags (tags (gethash id tag-table)))
+               (s (propertize alias 'meta (list :path file-path :title title :point pos :id id :tags tags))))
+          (push (cons s s) completions))))))
 
 ;;;; org-roam-find-ref
 (defun org-roam--get-ref-path-completions (&optional arg filter)
@@ -678,28 +665,21 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
 
 ;;; Interactive Commands
 ;;;###autoload
-(defun org-roam-find-node (&optional initial-prompt filter-fn no-confirm)
+(defun org-roam-find-node (&optional initial-input filter-fn no-confirm)
   "Find and open an Org-roam node by its title or alias.
-INITIAL-PROMPT is the initial prompt.
+INITIAL-INPUT is the initial input for the prompt.
 FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions.
 If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
   (interactive)
-  (let* ((completions (org-roam--node-completions))
-         (completions (if filter-fn
-                          (funcall filter-fn completions)
-                        completions))
-         (title-with-tags (if no-confirm
-                              initial-prompt
-                            (completing-read "File: " completions nil nil initial-prompt)))
-         (res (cdr (assoc title-with-tags completions)))
-         (file-path (plist-get res :path)))
-    (if file-path
+  (let* ((node (org-roam-node-read initial-input filter-fn))
+         (node-meta (get-text-property 0 'meta node)))
+    (if node-meta                          ; node exists
         (progn
-          (find-file file-path)
-          (goto-char (plist-get res :point)))
-      (let ((org-roam-capture--info `((title . ,title-with-tags)
-                                      (slug  . ,(funcall org-roam-title-to-slug-function title-with-tags))))
+          (find-file (plist-get node-meta :path))
+          (goto-char (plist-get node-meta :point)))
+      (let ((org-roam-capture--info `((title . ,node)
+                                      (slug  . ,(funcall org-roam-title-to-slug-function node))))
             (org-roam-capture--context 'title))
         (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
         (org-roam-capture--capture)))))
