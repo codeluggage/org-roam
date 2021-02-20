@@ -159,7 +159,7 @@ is a plist containing the properties of the node."
          (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
                                          :left :join nodes :on (= aliases:node_id nodes:id)]))
          (tag-table (org-roam--tags-table))
-         completions tags)
+         completions)
     (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
         (let* ((tags (gethash id tag-table))
@@ -243,14 +243,6 @@ window instead."
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
 
-;;;###autoload
-(defun org-roam-node-random (&optional other-window)
-  "Find a random Org-roam node.
-With prefix argument OTHER-WINDOW, visit the node in another
-window instead."
-  (interactive current-prefix-arg)
-  (org-roam-node-visit (seq-random-elt (org-roam-node-list))))
-
 ;;; Section inserter
 (cl-defun org-roam-node-insert-section (&key source source-file source-title pos _dest _dest-title props)
   "Insert section for NODE.
@@ -281,6 +273,36 @@ PROPS contains additional properties about the link."
             (oset section file source-file)
             (oset section begin begin)
             (oset section end end)))))))
+
+;;;Interactives
+;;;###autoload
+(defun org-roam-node-find (&optional initial-input filter-fn no-confirm)
+  "Find and open an Org-roam node by its title or alias.
+INITIAL-INPUT is the initial input for the prompt.
+FILTER-FN is the name of a function to apply on the candidates
+which takes as its argument an alist of path-completions.
+If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
+  (interactive)
+  (let* ((node (org-roam-node-read initial-input filter-fn))
+         (node-meta (get-text-property 0 'meta node)))
+    (if node-meta                          ; node exists
+        (progn
+          (find-file (plist-get node-meta :path))
+          (goto-char (plist-get node-meta :point)))
+      (let ((org-roam-capture--info `((title . ,node)
+                                      (slug  . ,(funcall org-roam-title-to-slug-function node))))
+            (org-roam-capture--context 'title))
+        (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
+        (org-roam-capture--capture)))))
+
+;;;###autoload
+(defun org-roam-node-random (&optional other-window)
+  "Find a random Org-roam node.
+With prefix argument OTHER-WINDOW, visit the node in another
+window instead."
+  (interactive current-prefix-arg)
+  (org-roam-node-visit (seq-random-elt (org-roam-node-list))))
+
 
 (provide 'org-roam-node)
 ;;; org-roam-node.el ends here

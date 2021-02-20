@@ -115,21 +115,6 @@ ensure that."
           (const :tag "Include everything" nil))
   :group 'org-roam)
 
-(defcustom org-roam-include-type-in-ref-path-completions nil
-  "When t, include the type in ref-path completions.
-Note that this only affects interactive calls.
-See `org-roam--get-ref-path-completions' for details."
-  :type 'boolean
-  :group 'org-roam)
-
-(defcustom org-roam-link-title-format "%s"
-  "The formatter used when inserting Org-roam links that use their title.
-Formatter may be a function that takes title as its only argument."
-  :type '(choice
-          (string :tag "String Format" "%s")
-          (function :tag "Custom function"))
-  :group 'org-roam)
-
 (defcustom org-roam-list-files-commands
   (if (member system-type '(windows-nt ms-dos cygwin))
       nil
@@ -156,24 +141,6 @@ executable. If a custom path is required, it can be specified together with the
 method symbol as a cons cell. For example: '(find (rg . \"/path/to/rg\"))."
   :type '(set (const :tag "find" find)
               (const :tag "rg" rg)))
-
-(defcustom org-roam-tag-separator ","
-  "String to use to separate tags when `org-roam-tag-sources' is non-nil."
-  :type 'string
-  :group 'org-roam)
-
-(defcustom org-roam-tag-sort nil
-  "When non-nil, sort the tags in the completions.
-When t, sort the tags alphabetically, regardless of case.
-`org-roam-tag-sort' can also be a list of arguments to be applied
-to `cl-sort'.  For example, these are the arguments used when
-`org-roam-tag-sort' is set to t:
-    \('string-lessp :key 'downcase)
-Only relevant when `org-roam-tag-sources' is non-nil."
-  :type '(choice
-          (boolean)
-          (list :tag "Arguments to cl-loop"))
-  :group 'org-roam)
 
 (defcustom org-roam-title-to-slug-function #'org-roam--title-to-slug
   "Function to be used in converting a title to the filename slug.
@@ -437,68 +404,6 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
     ht))
 
 ;;;; org-roam-find-ref
-(defun org-roam--get-ref-path-completions (&optional arg filter)
-  "Return an alist of refs to absolute path of Org-roam files.
-
-When called interactively (i.e. when ARG is 1), formats the car
-of the completion-candidates with extra information: title, tags,
-and type \(when `org-roam-include-type-in-ref-path-completions'
-is non-nil).
-
-When called with a `C-u' prefix (i.e. when ARG is 4), forces the
-default format without the formatting.
-
-FILTER can either be a string or a function:
-
-- If it is a string, it should be the type of refs to include as
-  candidates \(e.g. \"cite\", \"website\", etc.)
-
-- If it is a function, it should be the name of a function that
-  takes three arguments: the type, the ref, and the file of the
-  current candidate. It should return t if that candidate is to
-  be included as a candidate."
-  nil
-  ;; (let ((rows (org-roam-db-query
-  ;;              [:select [refs:type refs:ref refs:file titles:title tags:tags]
-  ;;               :from titles
-  ;;               :left :join tags
-  ;;               :on (= titles:file tags:file)
-  ;;               :left :join refs :on (= titles:file refs:file)
-  ;;               :where refs:file :is :not :null]))
-  ;;       completions)
-  ;;   (setq rows (seq-sort-by (lambda (x)
-  ;;                             (plist-get (nth 3 x) :mtime))
-  ;;                           #'time-less-p
-  ;;                           rows))
-  ;;   (dolist (row rows completions)
-  ;;     (pcase-let ((`(,type ,ref ,file-path ,title ,tags) row))
-  ;;       (when (pcase filter
-  ;;               ('nil t)
-  ;;               ((pred stringp) (string= type filter))
-  ;;               ((pred functionp) (funcall filter type ref file-path))
-  ;;               (wrong-type (signal 'wrong-type-argument
-  ;;                                   `((stringp functionp)
-  ;;                                     ,wrong-type))))
-  ;;         (let ((k (if (eq arg 1)
-  ;;                      (concat
-  ;;                       (when org-roam-include-type-in-ref-path-completions
-  ;;                         (format "{%s} " type))
-  ;;                       (org-roam--add-tag-string (format "%s (%s)" title ref)
-  ;;                                                 tags))
-  ;;                    ref))
-  ;;               (v (list :path file-path :type type :ref ref)))
-  ;;           (push (cons k v) completions))))))
-  )
-
-(defun org-roam--find-ref (ref)
-  "Find and open and Org-roam file from REF if it exists.
-REF should be the value of '#+roam_key:' without any
-type-information (e.g. 'cite:').
-Return nil if the file does not exist."
-  (when-let* ((completions (org-roam--get-ref-path-completions))
-              (file (plist-get (cdr (assoc ref completions)) :path)))
-    (find-file file)))
-
 (defun org-roam--get-roam-buffers ()
   "Return a list of buffers that are Org-roam files."
   (--filter (and (with-current-buffer it (derived-mode-p 'org-mode))
@@ -553,26 +458,6 @@ This is active when `org-roam-completion-everywhere' is non-nil."
 (add-to-list 'org-roam-completion-functions #'org-roam-link-complete-at-point)
 
 ;;; Org-roam-mode
-;;;; Function Faces
-;; These faces are used by `org-link-set-parameters', which take one argument,
-;; which is the path.
-(defcustom org-roam-link-use-custom-faces t
-  "Define where to apply custom faces to Org-roam links.
-
-Valide values are:
-
-t            Use custom faces inside Org-roam notes (i.e. files in
-             `org-roam-directory'.)
-
-everywhere   Apply custom faces everywhere.
-
-Otherwise, do not apply custom faces to Org-roam links."
-  :type '(choice
-          (const :tag "Use custom faces inside Org-roam notes" t)
-          (const :tag "Apply custom faces everywhere" everywhere)
-          (const :tag "Do not apply custom faces" nil))
-  :group 'org-roam)
-
 ;;; Org-roam entry point
 (defun org-roam-setup ()
   "Setup Org-roam."
@@ -645,49 +530,10 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
 
 ;;; Interactive Commands
 ;;;###autoload
-(defun org-roam-find-node (&optional initial-input filter-fn no-confirm)
-  "Find and open an Org-roam node by its title or alias.
-INITIAL-INPUT is the initial input for the prompt.
-FILTER-FN is the name of a function to apply on the candidates
-which takes as its argument an alist of path-completions.
-If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
-  (interactive)
-  (let* ((node (org-roam-node-read initial-input filter-fn))
-         (node-meta (get-text-property 0 'meta node)))
-    (if node-meta                          ; node exists
-        (progn
-          (find-file (plist-get node-meta :path))
-          (goto-char (plist-get node-meta :point)))
-      (let ((org-roam-capture--info `((title . ,node)
-                                      (slug  . ,(funcall org-roam-title-to-slug-function node))))
-            (org-roam-capture--context 'title))
-        (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
-        (org-roam-capture--capture)))))
-
-;;;###autoload
 (defun org-roam-find-directory ()
   "Find and open `org-roam-directory'."
   (interactive)
   (find-file org-roam-directory))
-
-;;;###autoload
-(defun org-roam-find-ref (arg &optional filter)
-  "Find and open an Org-roam file from a ref.
-ARG is used to forward interactive calls to
-`org-roam--get-ref-path-completions'
-FILTER can either be a string or a function:
-- If it is a string, it should be the type of refs to include as
-candidates (e.g. \"cite\" ,\"website\" ,etc.)
-- If it is a function, it should be the name of a function that
-takes three arguments: the type, the ref, and the file of the
-current candidate.  It should return t if that candidate is to be
-included as a candidate."
-  (interactive "p")
-  (let* ((completions (org-roam--get-ref-path-completions arg filter))
-         (ref (completing-read "Ref: " completions nil t))
-         (file (-> (cdr (assoc ref completions))
-                   (plist-get :path))))
-    (find-file file)))
 
 ;;;###autoload
 (defun org-roam-insert (&optional lowercase completions filter-fn description link-type)

@@ -278,7 +278,8 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (deadline nil)
           (level 0)
           (aliases (org-entry-get (point) "ROAM_ALIASES"))
-          (tags (org-entry-get (point) "ROAM_TAGS")))
+          (tags (org-entry-get (point) "ROAM_TAGS"))
+          (aliases (org-entry-get (point) "ROAM_REFS")))
       (org-roam-db-query
        [:insert :into nodes
         :values $v1]
@@ -337,6 +338,17 @@ If UPDATE-P is non-nil, first remove the file in the database."
                         :values $v1]
                        (mapcar (lambda (tag)
                                  (vector file node-id tag)) tags))))
+
+(defun org-roam-db-insert-refs ()
+  "Insert refs for node at point into Org-roam cache."
+  (when-let ((file (buffer-file-name (buffer-base-buffer)))
+             (node-id (org-id-get))
+             (refs (org-entry-get (point) "ROAM_REFS")))
+    (org-roam-db-query [:insert :into refs
+                        :values $v1]
+                       (mapcar (lambda (ref)
+                                 (vector file node-id ref))
+                               (split-string-and-unquote refs)))))
 
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
@@ -479,7 +491,8 @@ If the file exists, update the cache with information."
           (org-roam-db-map-headlines
            (list #'org-roam-db-insert-node-data
                  #'org-roam-db-insert-aliases
-                 #'org-roam-db-insert-tags))
+                 #'org-roam-db-insert-tags
+                 #'org-roam-db-insert-refs))
           (org-roam-db-map-links
            (list #'org-roam-db-insert-link)))))))
 
