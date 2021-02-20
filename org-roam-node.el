@@ -304,12 +304,10 @@ If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
         (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
         (org-roam-capture--capture)))))
 
-(defun org-roam-node-insert (&optional completionsn filter-fn)
+(defun org-roam-node-insert (&optional filter-fn)
   "Find an Org-roam file, and insert a relative org link to it at point.
 Return selected file if it exists.
 If LOWERCASE is non-nil, downcase the link description.
-COMPLETIONS is a list of completions to be used instead of
-`org-roam--node-completions'.
 FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions."
   (interactive)
@@ -329,23 +327,23 @@ which takes as its argument an alist of path-completions."
           (if (org-roam-node-id node)
               (progn
                 (when region-text
-                   (delete-region beg end)
-                   (set-marker beg nil)
-                   (set-marker end nil))
+                  (delete-region beg end)
+                  (set-marker beg nil)
+                  (set-marker end nil))
                 (insert (org-link-make-string
                          (concat "id:" (org-roam-node-id node))
                          description)))
             (let ((org-roam-capture--info
-                        `((title . ,title-with-tags)
-                          (slug . ,(funcall org-roam-title-to-slug-function node))))
-                       (org-roam-capture--context 'title))
-                   (setq org-roam-capture-additional-template-props
-                         (list :region (when (and beg end)
-                                         (cons beg end))
-                               :insert-at (point-marker)
-                               :link-description description
-                               :finalize 'insert-link))
-                   (org-roam-capture--capture)))))
+                   `((title . ,title-with-tags)
+                     (slug . ,(funcall org-roam-title-to-slug-function node))))
+                  (org-roam-capture--context 'title))
+              (setq org-roam-capture-additional-template-props
+                    (list :region (when (and beg end)
+                                    (cons beg end))
+                          :insert-at (point-marker)
+                          :link-description description
+                          :finalize 'insert-link))
+              (org-roam-capture--capture)))))
     (deactivate-mark)))
 
 ;;;###autoload
