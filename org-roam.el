@@ -223,9 +223,9 @@ If FILE is not specified, use the current buffer's file-path."
 (defun org-roam--list-files-search-globs (exts)
   "Given EXTS, return a list of search globs.
 E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
-  (append
-   (mapcar (lambda (ext) (s-wrap (concat "*." ext) "\"")) exts)
-   (mapcar (lambda (ext) (s-wrap (concat "*." ext ".gpg") "\"")) exts)))
+  (cl-loop for e in exts
+           append (list (format "\"*.%s\"" e)
+                        (format "\"*.%s.gpg\"" e))))
 
 (defun org-roam--list-files-rg (executable dir)
   "Return all Org-roam files located recursively within DIR, using ripgrep, provided as EXECUTABLE."
