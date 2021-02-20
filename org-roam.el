@@ -436,27 +436,6 @@ prepends TAGS to STR, appends TAGS to STR or omits TAGS from STR."
       (puthash node-id (cons tag (gethash node-id ht)) ht))
     ht))
 
-(defun org-roam--node-completions ()
-  "Return an alist for node completion.
-The car is the displayed title or alias for the node, and the cdr
-is a plist containing the properties of the node."
-  (let* ((rows (org-roam-db-query [:select [nodes:file nodes:id nodes:title nodes:pos]
-                                   :from nodes]))
-         (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
-                                         :left :join nodes :on (= aliases:node_id nodes:id)]))
-         (tag-table (org-roam--tags-table))
-         completions tags)
-    (dolist (row rows)
-      (pcase-let ((`(,file-path ,id ,title ,pos) row))
-        (let* ((tags (gethash id tag-table))
-              (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
-          (push (cons s s) completions))))
-    (dolist (row alias-rows completions)
-      (pcase-let ((`(,file-path ,id ,alias ,pos) row))
-        (let* ((tags (tags (gethash id tag-table)))
-               (s (propertize alias 'meta (list :path file-path :title title :point pos :id id :tags tags))))
-          (push (cons s s) completions))))))
-
 ;;;; org-roam-find-ref
 (defun org-roam--get-ref-path-completions (&optional arg filter)
   "Return an alist of refs to absolute path of Org-roam files.
@@ -731,18 +710,11 @@ If DESCRIPTION is provided, use this as the link label."
                     (setq beg (set-marker (make-marker) (region-beginning)))
                     (setq end (set-marker (make-marker) (region-end)))
                     (setq region-text (org-link-display-format (buffer-substring-no-properties beg end)))))
-               (completions (--> (or completions
-                                     (org-roam--node-completions))
-                              (if filter-fn
-                                  (funcall filter-fn it)
-                                it)))
-               (title-with-tags (completing-read "File: " completions nil nil region-text))
-               (res (cdr (assoc title-with-tags completions)))
-               (title (or (plist-get res :title)
-                          title-with-tags))
-               (target-id (plist-get res :id))
-               (target-file (plist-get res :path))
-               (description (or description region-text title))
+               (node (org-roam-node-read region-text filter-fn))
+               (node-meta (get-text-property 0 'meta node))
+               (target-id (plist-get node-meta :id))
+               (target-file (plist-get node-meta :path))
+               (description (or description region-text node))
                (description (if lowercase
                                 (downcase description)
                               description)))

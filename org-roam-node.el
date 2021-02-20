@@ -150,12 +150,33 @@ instead."
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
 
+(defun org-roam-node--completions ()
+  "Return an alist for node completion.
+The car is the displayed title or alias for the node, and the cdr
+is a plist containing the properties of the node."
+  (let* ((rows (org-roam-db-query [:select [nodes:file nodes:id nodes:title nodes:pos]
+                                   :from nodes]))
+         (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
+                                         :left :join nodes :on (= aliases:node_id nodes:id)]))
+         (tag-table (org-roam--tags-table))
+         completions tags)
+    (dolist (row rows)
+      (pcase-let ((`(,file-path ,id ,title ,pos) row))
+        (let* ((tags (gethash id tag-table))
+              (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
+          (push (cons s s) completions))))
+    (dolist (row alias-rows completions)
+      (pcase-let ((`(,file-path ,id ,alias ,pos) row))
+        (let* ((tags (tags (gethash id tag-table)))
+               (s (propertize alias 'meta (list :path file-path :title title :point pos :id id :tags tags))))
+          (push (cons s s) completions))))))
+
 (defun org-roam-node-read (&optional initial-input filter-fn)
   "Read an Org-roam node.
 Return a string, which is propertized in `meta' with the node
 properties if it is a match, or a plain string with the prompt
 otherwise."
-  (let* ((nodes (org-roam--node-completions))
+  (let* ((nodes (org-roam-node--completions))
          (nodes (if filter-fn
                     (funcall filter-fn nodes)
                   nodes))

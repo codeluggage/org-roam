@@ -558,7 +558,7 @@ GOTO and KEYS argument have the same functionality as
 This uses the templates defined at `org-roam-capture-templates'.
 Arguments GOTO and KEYS see `org-capture'."
   (interactive "P")
-  (let* ((completions (org-roam--node-completions))
+  (let* ((completions (org-roam-node--completions))
          (title-with-keys (completing-read "File: " completions))
          (res (cdr (assoc title-with-keys completions)))
          (title (or (plist-get res :title) title-with-keys))
