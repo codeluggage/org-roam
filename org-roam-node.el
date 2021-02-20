@@ -163,7 +163,7 @@ is a plist containing the properties of the node."
     (dolist (row rows)
       (pcase-let ((`(,file-path ,id ,title ,pos) row))
         (let* ((tags (gethash id tag-table))
-              (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
+               (s (propertize title 'meta (list :path file-path :title title :point pos :id id :tags tags))))
           (push (cons s s) completions))))
     (dolist (row alias-rows completions)
       (pcase-let ((`(,file-path ,id ,alias ,pos) row))
@@ -175,11 +175,11 @@ is a plist containing the properties of the node."
   "Read an Org-roam node.
 Return a string, which is propertized in `meta' with the node
 properties if it is a match, or a plain string with the prompt
-otherwise."
+otherwise.
+INITIAL-INPUT is the initial prompt value.
+FILTER-FN is a function applied to the completion list."
   (let* ((nodes (org-roam-node--completions))
-         (nodes (if filter-fn
-                    (funcall filter-fn nodes)
-                  nodes))
+         (nodes (funcall (or filter-fn #'identity) nodes))
          (node (completing-read "Node: "
                                 (lambda (string pred action)
                                   (if (eq action 'metadata)

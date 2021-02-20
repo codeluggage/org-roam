@@ -575,6 +575,7 @@ Otherwise, do not apply custom faces to Org-roam links."
 
 ;;; Org-roam entry point
 (defun org-roam-setup ()
+  "Setup Org-roam."
   (interactive)
   (unless (or (and (bound-and-true-p emacsql-sqlite3-executable)
                    (file-executable-p emacsql-sqlite3-executable))
@@ -728,7 +729,7 @@ If DESCRIPTION is provided, use this as the link label."
                 (t
                  (let ((org-roam-capture--info
                         `((title . ,title-with-tags)
-                          (slug . ,(funcall org-roam-title-to-slug-function title-with-tags))))
+                          (slug . ,(funcall org-roam-title-to-slug-function node))))
                        (org-roam-capture--context 'title))
                    (setq org-roam-capture-additional-template-props
                          (list :region (when (and beg end)
@@ -738,7 +739,7 @@ If DESCRIPTION is provided, use this as the link label."
                                :link-description description
                                :finalize 'insert-link))
                    (org-roam-capture--capture))))
-          res))
+          node))
     (deactivate-mark)))
 
 (provide 'org-roam)
