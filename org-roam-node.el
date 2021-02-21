@@ -32,14 +32,10 @@
 ;;; Code:
 ;;;; Library Requires
 (require 'magit-section)
+(require 'org-roam-structs)
 
 (defvar org-roam-mode-sections)
 (defvar org-roam-mode-map)
-;;; Node Struct
-(cl-defstruct (org-roam-node (:constructor org-roam-node-create)
-                             (:copier nil))
-  id file level point todo priority scheduled deadline title tags)
-
 ;;; Section
 ;;;; Definition
 (defvar org-roam-node-map
@@ -81,9 +77,35 @@
    (end :initform nil)))
 
 ;;; Functions
-(defun org-roam-node-list ()
-  "Return list of all nodes."
-  (mapcar #'car (org-roam-db-query [:select [id] :from nodes])))
+(cl-defmethod org-roam-populate ((node org-roam-node))
+  "Populate NODE from database."
+  (let ((node-info (car (org-roam-db-query [:select [file level pos todo priority scheduled deadline title]
+                                            :from nodes
+                                            :where (= id $s1)
+                                            :limit 1]
+                                           (org-roam-node-id node))))
+        (tag-info (mapcar #'car (org-roam-db-query [:select [tag] :from tags
+                                                    :where (= node-id $s1)]
+                                                   (org-roam-node-id node))))
+        (alias-info (mapcar #'car (org-roam-db-query [:select [alias] :from aliases
+                                                      :where (= node-id $s1)]
+                                                     (org-roam-node-id node))))
+        (refs-info (mapcar #'car (org-roam-db-query [:select [ref] :from refs
+                                                     :where (= node-id $s1)]
+                                                    (org-roam-node-id node)))))
+    (pcase-let ((`(,file ,level ,pos ,todo ,priority ,scheduled ,deadline ,title) node-info))
+      (setf (org-roam-node-file node) file
+            (org-roam-node-level node) level
+            (org-roam-node-point node) pos
+            (org-roam-node-todo node) todo
+            (org-roam-node-priority node) priority
+            (org-roam-node-scheduled node) scheduled
+            (org-roam-node-deadline node) deadline
+            (org-roam-node-title node) title
+            (org-roam-node-tags node) tag-info
+            (org-roam-node-refs node) refs-info
+            (org-roam-node-aliases node) alias-info))
+    node))
 
 (defun org-roam-node-backlinks (node)
   "Return the backlinks for NODE."
@@ -94,12 +116,6 @@
     :left :join nodes d :on (= links:dest d:id)
     :where (= dest $s1)]
    node))
-
-(defun org-roam-node-title (node)
-  "Return the title for a given NODE."
-  (caar (org-roam-db-query [:select title :from nodes
-                            :where (= id $s1)]
-                           node)))
 
 (defun org-roam-node-preview (file point)
   "Get preview content for FILE at POINT."
@@ -115,31 +131,26 @@
 (defun org-roam-node-at-point (&optional assert)
   "Return the node at point.
 If ASSERT, throw an error."
-  (if-let ((node (magit-section-case
-                   (org-roam-node-section (oref it node))
-                   (t (let (id)
-                        (org-with-wide-buffer
-                         (while (and (not (setq id (org-id-get)))
-                                     (not (bobp)))
-                           (org-up-heading-or-point-min))
-                         id))))))
-      node
+  (if-let ((node-id (magit-section-case
+                      (org-roam-node-section (oref it node))
+                      (t (let (id)
+                           (org-with-wide-buffer
+                            (while (and (not (setq id (org-id-get)))
+                                        (not (bobp)))
+                              (org-up-heading-or-point-min))
+                            id))))))
+      (org-roam-populate (org-roam-node-create :id node-id))
     (when assert
       (user-error "No node at point"))))
 
-(defun org-roam-node-find (node)
+(defun org-roam-node--find (node)
   "Navigate to the point for NODE, and return the buffer."
-  (let ((res (org-roam-db-query [:select [file pos] :from nodes
-                                 :where (= id $s1)
-                                 :limit 1]
-                                node)))
-    (pcase res
-      (`((,file ,pos))
-       (let ((buf (find-file-noselect file)))
-         (with-current-buffer buf
-           (goto-char pos))
-         buf))
-      ('nil (user-error "No node with ID %s" node)))))
+  (unless (org-roam-node-file node)
+    (user-error "Node does not have corresponding file."))
+  (let ((buf (find-file-noselect (org-roam-node-file node))))
+    (with-current-buffer buf
+      (goto-char (org-roam-node-point node)))
+    buf))
 
 (defun org-roam-node-visit (node &optional other-window)
   "From the buffer, visit NODE.
@@ -148,7 +159,7 @@ Display the buffer in the selected window.  With a prefix
 argument OTHER-WINDOW display the buffer in another window
 instead."
   (interactive (list (org-roam-node-at-point t) current-prefix-arg))
-  (let ((buf (org-roam-node-find node)))
+  (let ((buf (org-roam-node--find node)))
     (funcall (if other-window
                  #'switch-to-buffer-other-window
                #'pop-to-buffer-same-window) buf)))
@@ -286,20 +297,18 @@ PROPS contains additional properties about the link."
 
 ;;;Interactives
 ;;;###autoload
-(defun org-roam-node-find (&optional initial-input filter-fn no-confirm)
+(defun org-roam-node-find (&optional other-window initial-input filter-fn)
   "Find and open an Org-roam node by its title or alias.
 INITIAL-INPUT is the initial input for the prompt.
 FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions.
-If NO-CONFIRM, assume that the user does not want to modify the initial prompt."
-  (interactive)
+If OTHER-WINDOW, visit the NODE in another window."
+  (interactive current-prefix-arg)
   (let ((node (org-roam-node-read initial-input filter-fn)))
     (if (org-roam-node-file node)
-        (progn
-          (find-file (org-roam-node-file node))
-          (goto-char (org-roam-node-point node)))
+        (org-roam-node-visit node other-window)
       (let ((org-roam-capture--info `((title . (org-roam-node-title node))
-                                      (slug  . ,(funcall org-roam-title-to-slug-function node))))
+                                      (slug  . ,(funcall org-roam-title-to-slug-function (org-roam-node-title node)))))
             (org-roam-capture--context 'title))
         (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
         (org-roam-capture--capture)))))
@@ -311,7 +320,6 @@ If LOWERCASE is non-nil, downcase the link description.
 FILTER-FN is the name of a function to apply on the candidates
 which takes as its argument an alist of path-completions."
   (interactive)
-  ;; Deactivate the mark on quit since `atomic-change-group' prevents it
   (unwind-protect
       ;; Group functions together to avoid inconsistent state on quit
       (atomic-change-group
@@ -334,8 +342,8 @@ which takes as its argument an alist of path-completions."
                          (concat "id:" (org-roam-node-id node))
                          description)))
             (let ((org-roam-capture--info
-                   `((title . ,title-with-tags)
-                     (slug . ,(funcall org-roam-title-to-slug-function node))))
+                   `((title . ,(org-roam-node-title node))
+                     (slug . ,(funcall org-roam-title-to-slug-function (org-roam-node-title node)))))
                   (org-roam-capture--context 'title))
               (setq org-roam-capture-additional-template-props
                     (list :region (when (and beg end)
@@ -352,7 +360,10 @@ which takes as its argument an alist of path-completions."
 With prefix argument OTHER-WINDOW, visit the node in another
 window instead."
   (interactive current-prefix-arg)
-  (org-roam-node-visit (seq-random-elt (org-roam-node-list))))
+  (let ((random-id (seq-random-elt
+                    (mapcar #'car (org-roam-db-query [:select [id] :from nodes])))))
+    (org-roam-node-visit (org-roam-populate
+                          (org-roam-node-create :id random-id)))))
 
 
 (provide 'org-roam-node)

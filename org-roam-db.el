@@ -41,6 +41,8 @@
   ;; For `org-with-wide-buffer'
   (require 'org-macs))
 
+(require 'org-roam-structs)
+
 (defvar org-roam-directory)
 (defvar org-roam-verbose)
 (defvar org-agenda-files)
@@ -507,16 +509,7 @@ If the file exists, update the cache with information."
 (defun org-roam-db-diagnose-node ()
   "Print information about node at point."
   (interactive)
-  (let* ((node (org-roam-node-at-point))
-         (aliases (org-roam-db-query [:select [alias] :from aliases
-                                      :where (= node_id $s1)]
-                                     node))
-         (tags (org-roam-db-query [:select [tag] :from tags
-                                   :where (= node_id $s1)]
-                                  node)))
-    (message "Aliases: %s\nTags: %s"
-             (string-join (mapcar #'car aliases) ", ")
-             (string-join (mapcar #'car tags) ", "))))
+  (prin1 (org-roam-node-at-point)))
 
 (provide 'org-roam-db)
 

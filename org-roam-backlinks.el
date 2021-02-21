@@ -48,7 +48,7 @@
     :left :join nodes s :on (= links:source s:id)
     :left :join nodes d :on (= links:dest d:id)
     :where (= dest $s1)]
-   node))
+   (org-roam-node-id node)))
 
 ;;; Section inserter
 (cl-defun org-roam-backlinks-insert-section (&key node _file)

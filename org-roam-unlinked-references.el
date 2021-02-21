@@ -117,16 +117,10 @@ This is the ROW within FILE."
   "Render unlinked references for NODE.
 References from FILE are excluded."
   (when (and (executable-find "rg")
-             (not (string-match "PCRE2 is not available" (shell-command-to-string "rg --pcre2-version"))))
-    (let* ((title (caar (org-roam-db-query [:select [title] :from nodes
-                                            :where (= id $s1)
-                                            :limit 1]
-                                           node)))
-           (aliases (mapcar #'car
-                            (org-roam-db-query [:select [alias] :from aliases
-                                                :where (= node_id $s1)]
-                                               node)))
-           (titles (cons title aliases))
+             (not (string-match "PCRE2 is not available"
+                                (shell-command-to-string "rg --pcre2-version"))))
+    (let* ((titles (cons (org-roam-node-title node)
+                         (org-roam-node-aliases node)))
            (rg-command (concat "rg -o --vimgrep -P -i "
                                (string-join (mapcar (lambda (glob) (concat "-g " glob))
                                                     (org-roam--list-files-search-globs
