@@ -145,18 +145,20 @@ instead."
   "Return an alist for node completion.
 The car is the displayed title or alias for the node, and the cdr
 is a plist containing the properties of the node."
-  (cl-loop for row in (append
-                       (org-roam-db-query [:select [file pos title id]
-                                           :from nodes])
-                       (org-roam-db-query [:select [nodes:file pos alias node-id]
-                                           :from aliases
-                                           :left-join nodes
-                                           :on (= aliases:node-id nodes:id)]))
-           collect (pcase-let* ((`(,file ,pos ,title ,id) row)
-                                (node (org-roam-node-create :id id
-                                                            :file file
-                                                            :point pos)))
-                     (cons (propertize title 'node node) node))))
+  (let ((tags-table (org-roam--tags-table)))
+    (cl-loop for row in (append
+                         (org-roam-db-query [:select [file pos title id]
+                                             :from nodes])
+                         (org-roam-db-query [:select [nodes:file pos alias node-id]
+                                             :from aliases
+                                             :left-join nodes
+                                             :on (= aliases:node-id nodes:id)]))
+             collect (pcase-let* ((`(,file ,pos ,title ,id) row)
+                                  (node (org-roam-node-create :id id
+                                                              :file file
+                                                              :point pos
+                                                              :tags (gethash id tags-table))))
+                       (cons (propertize title 'node node) node)))))
 
 (defun org-roam-node-read (&optional initial-input filter-fn)
   "Read and return an `org-roam-node'.

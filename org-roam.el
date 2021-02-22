@@ -61,6 +61,7 @@
 (require 'org-roam-completion)
 (require 'org-roam-capture)
 (require 'org-roam-dailies)
+(require 'org-roam-ref)
 (require 'org-roam-db)
 (require 'org-roam-doctor)
 (require 'org-roam-graph)
