@@ -65,7 +65,10 @@
 
 ;;; Functions
 (cl-defmethod org-roam-populate ((node org-roam-node))
-  "Populate NODE from database."
+  "Populate NODE from database.
+Uses the ID, and fetches remaining details from the database.
+This can be quite costly: avoid, unless dealing with very few
+nodes."
   (let ((node-info (car (org-roam-db-query [:select [file level pos todo priority scheduled deadline title]
                                             :from nodes
                                             :where (= id $s1)
@@ -289,10 +292,10 @@ which takes as its argument an alist of path-completions."
 With prefix argument OTHER-WINDOW, visit the node in another
 window instead."
   (interactive current-prefix-arg)
-  (let ((random-id (seq-random-elt
-                    (mapcar #'car (org-roam-db-query [:select [id] :from nodes])))))
-    (org-roam-node-visit (org-roam-populate
-                          (org-roam-node-create :id random-id)))))
+  (let ((random-row (seq-random-elt (org-roam-db-query [:select [id file pos] :from nodes]))))
+    (org-roam-node-visit (org-roam-node-create :id (nth 0 random-row)
+                                               :file (nth 1 random-row)
+                                               :point (nth 2 random-row)))))
 
 
 (provide 'org-roam-node)
