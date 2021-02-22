@@ -94,16 +94,6 @@
             (org-roam-node-aliases node) alias-info))
     node))
 
-(defun org-roam-node-backlinks (node)
-  "Return the backlinks for NODE."
-  (org-roam-db-query
-   [:select [links:source links:file links:pos s:title links:dest d:title links:properties]
-    :from links
-    :left :join nodes s :on (= links:source s:id)
-    :left :join nodes d :on (= links:dest d:id)
-    :where (= dest $s1)]
-   node))
-
 (defun org-roam-node-preview (file point)
   "Get preview content for FILE at POINT."
   (org-roam-with-temp-buffer file
@@ -155,32 +145,18 @@ instead."
   "Return an alist for node completion.
 The car is the displayed title or alias for the node, and the cdr
 is a plist containing the properties of the node."
-  (let* ((rows (org-roam-db-query [:select [nodes:file nodes:id nodes:title nodes:pos]
-                                   :from nodes]))
-         (alias-rows (org-roam-db-query [:select [nodes:file nodes:id aliases:alias nodes:pos] :from aliases
-                                         :left :join nodes :on (= aliases:node_id nodes:id)]))
-         (tag-table (org-roam--tags-table))
-         completions)
-    (dolist (row rows)
-      (pcase-let ((`(,file-path ,id ,title ,pos) row))
-        (let* ((tags (gethash id tag-table))
-               (s (propertize title 'meta (list :file file-path :title title :point pos :id id :tags tags)))
-               (node (org-roam-node-create :id id
-                                           :file file-path
-                                           :title title
-                                           :point pos
-                                           :tags tags)))
-          (push (cons s node) completions))))
-    (dolist (row alias-rows completions)
-      (pcase-let ((`(,file-path ,id ,alias ,pos) row))
-        (let* ((tags (gethash id tag-table))
-               (s (propertize alias 'meta (list :file file-path :title alias :point pos :id id :tags tags)))
-               (node (org-roam-node-create :id id
-                                           :file file-path
-                                           :title alias
-                                           :point pos
-                                           :tags tags)))
-          (push (cons s node) completions))))))
+  (cl-loop for row in (append
+                       (org-roam-db-query [:select [file pos title id]
+                                           :from nodes])
+                       (org-roam-db-query [:select [nodes:file pos alias node-id]
+                                           :from aliases
+                                           :left-join nodes
+                                           :on (= aliases:node-id nodes:id)]))
+           collect (pcase-let* ((`(,file ,pos ,title ,id) row)
+                                (node (org-roam-node-create :id id
+                                                            :file file
+                                                            :point pos)))
+                     (cons (propertize title 'node node) node))))
 
 (defun org-roam-node-read (&optional initial-input filter-fn)
   "Read and return an `org-roam-node'.
@@ -201,8 +177,8 @@ FILTER-FN is a function applied to the completion list."
 
 (defun org-roam-node--annotation (node-title)
   "Return the annotation string for a NODE-TITLE."
-  (let* ((meta (get-text-property 0 'meta node-title))
-         (tags (plist-get meta :tags)))
+  (let* ((node (get-text-property 0 'node node-title))
+         (tags (org-roam-node-tags node)))
     (when tags
       (format " (%s)" (string-join tags ", ")))))
 

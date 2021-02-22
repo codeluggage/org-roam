@@ -512,9 +512,6 @@ When NEW-FILE-OR-DIR is a directory, we use it to compute the new file path."
              (not (org-roam-capture-p)))
     (org-roam-db-update-file)))
 
-(defun org-roam--get-ref-path-completions ()
-  nil)
-
 ;;; Interactive Commands
 ;;;###autoload
 (defun org-roam-find-directory ()

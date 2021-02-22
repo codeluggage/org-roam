@@ -53,7 +53,8 @@
   (let ((backlinks (org-roam-db-query
                     [:select [source dest pos properties]
                      :from links
-                     :where (= dest $s1)]
+                     :where (= dest $s1)
+                     :and (= type "id")]
                     (org-roam-node-id node))))
     (cl-loop for backlink in backlinks
              collect (pcase-let ((`(,source-id ,dest-id ,pos ,properties) backlink))

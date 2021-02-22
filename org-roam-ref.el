@@ -55,15 +55,18 @@ FILTER can either be a string or a function:
   be included as a candidate."
   nil
   (let ((rows (org-roam-db-query
-               [:select [refs:node-id refs:ref nodes:title nodes:file nodes:pos]
+               [:select [id ref nodes:file pos title]
                 :from refs
-                :left :join nodes
+                :left-join nodes
                 :on (= refs:node-id nodes:id)])))
-    (mapcar (lambda (row)
-              (pcase-let ((`(,id ,ref ,title ,file, pos) row))
-                (let ((s (propertize ref 'meta (list :id id :ref ref :title title :file file :pos pos))))
-                  (cons s s))))
-            rows)))
+    (cl-loop for row in rows
+             collect (pcase-let* ((`(,id ,ref ,file ,pos ,title) row)
+                                  (node (org-roam-node-create :id id
+                                                              :file file
+                                                              :point pos
+                                                              :title title)))
+                       (cons (propertize ref 'node node)
+                             node)))))
 
 (defun org-roam-ref-read (&optional initial-input filter-fn)
   "Read an Org-roam ref.
@@ -85,8 +88,8 @@ FILTER-FN is a function applied to the completion list."
 (defun org-roam-ref--annotation (ref)
   "Return the annotation for REF.
 REF is assumed to be a propertized string."
-  (let* ((meta (get-text-property 0 'meta ref))
-         (title (plist-get meta :title)))
+  (let* ((node (get-text-property 0 'node ref))
+         (title (org-roam-node-title node)))
     (when title
       (concat " " title))))
 
@@ -97,10 +100,9 @@ type-information (e.g. 'cite:').
 INITIAL-INPUT is the initial input to the prompt.
 FILTER-FN is applied to the ref list to filter out candidates."
   (interactive)
-  (let* ((ref (org-roam-ref-read initial-input filter-fn))
-         (meta (get-text-property 0 'meta ref)))
-    (find-file (plist-get meta :file))
-    (goto-char (plist-get meta :pos))))
+  (let* ((node (org-roam-ref-read initial-input filter-fn)))
+    (find-file (org-roam-node-file node))
+    (goto-char (org-roam-node-point node))))
 
 (provide 'org-roam-ref)
 ;;; org-roam-ref.el ends here
