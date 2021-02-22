@@ -52,6 +52,12 @@
   "Face for Org-roam titles."
   :group 'org-roam-faces)
 
+(defface org-roam-olp
+  '((((class color) (background light)) :foreground "grey60")
+    (((class color) (background  dark)) :foreground "grey40"))
+  "Face for the OLP of the node."
+  :group 'org-roam-faces)
+
 (defface org-roam-preview-heading
   `((((class color) (background light))
      ,@(and (>= emacs-major-version 27) '(:extend t))

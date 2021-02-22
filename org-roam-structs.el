@@ -37,10 +37,13 @@
 
 (cl-defstruct (org-roam-node (:constructor org-roam-node-create)
                              (:copier nil))
-  id file level point todo priority scheduled deadline title tags)
+  id file level point todo priority scheduled deadline title
+  tags aliases refs)
 
-(cl-defgeneric org-roam-from-db (object)
-  "Populate OBJECT from database.")
+(cl-defstruct (org-roam-backlink (:constructor org-roam-backlink-create)
+                                 (:copier nil))
+  source-node target-node
+  file pos title properties)
 
 (provide 'org-roam-structs)
 ;;; org-roam-structs.el ends here

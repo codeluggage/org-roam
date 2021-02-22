@@ -60,6 +60,7 @@
   "Return the file at point.
 If ASSERT, throw an error."
   (if-let ((file (magit-section-case
+                   (org-roam-node-section (org-roam-node-file (oref it node)))
                    (org-roam-grep-section (oref it file))
                    (org-roam-olp-section (oref it file))
                    (org-roam-preview-section (oref it file)))))

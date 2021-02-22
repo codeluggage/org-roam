@@ -558,19 +558,17 @@ GOTO and KEYS argument have the same functionality as
 This uses the templates defined at `org-roam-capture-templates'.
 Arguments GOTO and KEYS see `org-capture'."
   (interactive "P")
-  (let* ((completions (org-roam-node--completions))
-         (title-with-keys (completing-read "File: " completions))
-         (res (cdr (assoc title-with-keys completions)))
-         (title (or (plist-get res :title) title-with-keys))
-         (file-path (plist-get res :path)))
-    (let ((org-roam-capture--info (list (cons 'title title)
-                                        (cons 'slug (funcall org-roam-title-to-slug-function title))
-                                        (cons 'file file-path)))
-          (org-roam-capture--context 'capture))
-      (condition-case err
-          (org-roam-capture--capture goto keys)
-        (error (user-error "%s.  Please adjust `org-roam-capture-templates'"
-                           (error-message-string err)))))))
+  (let ((node (org-roam-node-read)))
+    (if (org-roam-node-id node)
+        (let ((org-roam-capture--info (list (cons 'title (org-roam-node-title node))
+                                            (cons 'slug (funcall org-roam-title-to-slug-function
+                                                                 (org-roam-node-title node)))
+                                            (cons 'file (org-roam-node-file node))))
+              (org-roam-capture--context 'capture))
+          (condition-case err
+              (org-roam-capture--capture goto keys)
+            (error (user-error "%s.  Please adjust `org-roam-capture-templates'"
+                               (error-message-string err))))))))
 
 (provide 'org-roam-capture)
 

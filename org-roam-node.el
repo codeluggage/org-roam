@@ -49,26 +49,13 @@
   ((keymap :initform org-roam-node-map)
    (node :initform nil)))
 
-;; TODO: move to own files
-(defvar org-roam-olp-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map org-roam-mode-map)
-    (define-key map [remap org-roam-visit-thing] 'org-roam-olp-visit)
-    map)
-  "Keymap for Org-roam grep result sections.")
-
+;; TODO move to own files
 (defvar org-roam-preview-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map org-roam-mode-map)
     (define-key map [remap org-roam-visit-thing] 'org-roam-preview-visit)
     map)
   "Keymap for Org-roam preview.")
-
-(defclass org-roam-olp-section (magit-section)
-  ((keymap :initform org-roam-olp-map)
-   (file :initform nil)
-   (olp :initform nil)
-   (heading-highlight-face :initform org-roam-preview-heading-highlight)))
 
 (defclass org-roam-preview-section (magit-section)
   ((keymap :initform org-roam-preview-map)
@@ -131,15 +118,15 @@
 (defun org-roam-node-at-point (&optional assert)
   "Return the node at point.
 If ASSERT, throw an error."
-  (if-let ((node-id (magit-section-case
-                      (org-roam-node-section (oref it node))
-                      (t (let (id)
-                           (org-with-wide-buffer
-                            (while (and (not (setq id (org-id-get)))
-                                        (not (bobp)))
-                              (org-up-heading-or-point-min))
-                            id))))))
-      (org-roam-populate (org-roam-node-create :id node-id))
+  (if-let ((node (magit-section-case
+                   (org-roam-node-section (oref it node))
+                   (t (let (id)
+                        (org-with-wide-buffer
+                         (while (and (not (setq id (org-id-get)))
+                                     (not (bobp)))
+                           (org-up-heading-or-point-min))
+                         (org-roam-populate (org-roam-node-create :id id))))))))
+        node
     (when assert
       (user-error "No node at point"))))
 
@@ -219,36 +206,6 @@ FILTER-FN is a function applied to the completion list."
     (when tags
       (format " (%s)" (string-join tags ", ")))))
 
-;; TODO: move to own file
-(defun org-roam-olp-at-point (&optional assert)
-  "Return the olp at point.
-If ASSERT, throw an error."
-  (magit-section-case
-    (org-roam-olp-section (oref it olp))
-    (t (when assert
-         (user-error "No olp at point")))))
-
-(defun org-roam-olp-visit (file olp &optional other-window)
-  "Visit OLP in FILE.
-With prefix argument OTHER-WINDOW, visit the olp in another
-window instead."
-  (interactive (list (org-roam-file-at-point t)
-                     (org-roam-olp-at-point t)
-                     current-prefix-arg))
-  (let ((buf (find-file-noselect file)))
-    (with-current-buffer buf
-      (widen)
-      (when olp
-        (condition-case err
-            (let ((m (org-find-olp olp t)))
-              (goto-char (org-find-olp olp t))
-              (set-marker m nil))
-          (error
-           (error "Could not find OLP")))))
-    (funcall (if other-window
-                 #'switch-to-buffer-other-window
-               #'pop-to-buffer-same-window) buf)))
-
 (defun org-roam-preview-visit (file point &optional other-window)
   "Visit FILE at POINT.
 With prefix argument OTHER-WINDOW, visit the olp in another
@@ -265,35 +222,29 @@ window instead."
                #'pop-to-buffer-same-window) buf)))
 
 ;;; Section inserter
-(cl-defun org-roam-node-insert-section (&key source source-file source-title pos _dest _dest-title props)
+(cl-defun org-roam-node-insert-section (&key source-node point properties)
   "Insert section for NODE.
-SOURCE is the node id.
-SOURCE-FILE is the file for the node.
-SOURCE-TITLE is the title of the source node.
-POS is the position in the file for the link to node.
-PROPS contains additional properties about the link."
+SOURCE-NODE is the source node.
+POINT is the point in buffer for the link.
+PROPERTIES contains properties about the link."
   (magit-insert-section section (org-roam-node-section)
-    (magit-insert-heading (propertize source-title 'font-lock-face 'org-roam-title))
-    (oset section node source)
-    (let ((outline (plist-get props :outline)))
-      (magit-insert-section section (org-roam-olp-section)
-        (insert (propertize
-                 (concat
-                  (if outline
-                      (string-join (mapcar #'org-link-display-format outline)
-                                   " > ")
-                    "Top Level")
-                  "\n")
-                 'font-lock-face 'org-roam-preview-heading))
-        (magit-insert-heading)
-        (oset section file source-file)
-        (oset section olp outline)
-        (magit-insert-section section (org-roam-preview-section)
-          (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview source-file pos)))
+    (let ((outline (if-let ((outline (plist-get properties :outline)))
+                       (string-join (mapcar #'org-link-display-format outline)
+                                    " > ")
+                     "Top")))
+      (insert (concat (propertize (org-roam-node-title source-node)
+                                  'font-lock-face 'org-roam-title)
+                      (format " (%s)"
+                              (propertize outline 'font-lock-face 'org-roam-olp)))))
+    (magit-insert-heading)
+    (oset section node source-node)
+    (magit-insert-section section (org-roam-preview-section)
+          (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview (org-roam-node-file source-node)
+                                                                point)))
             (insert (org-fontify-like-in-org-mode s) "\n")
-            (oset section file source-file)
+            (oset section file (org-roam-node-file source-node))
             (oset section begin begin)
-            (oset section end end)))))))
+            (oset section end end)))))
 
 ;;;Interactives
 ;;;###autoload

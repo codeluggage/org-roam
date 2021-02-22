@@ -40,33 +40,47 @@
 ;;;; Definition
 
 ;;; Functions
+(cl-defmethod org-roam-populate ((backlink org-roam-backlink))
+  "Populate BACKLINK from database."
+  (setf (org-roam-backlink-source-node backlink)
+        (org-roam-populate (org-roam-backlink-source-node backlink))
+        (org-roam-backlink-target-node backlink)
+        (org-roam-populate (org-roam-backlink-target-node backlink)))
+  backlink)
+
 (defun org-roam-backlinks-get (node)
   "Return the backlinks for NODE."
-  (org-roam-db-query
-   [:select [links:source links:file links:pos s:title links:dest d:title links:properties]
-    :from links
-    :left :join nodes s :on (= links:source s:id)
-    :left :join nodes d :on (= links:dest d:id)
-    :where (= dest $s1)]
-   (org-roam-node-id node)))
+  (let ((backlinks (org-roam-db-query
+                    [:select [source dest pos properties]
+                     :from links
+                     :where (= dest $s1)]
+                    (org-roam-node-id node))))
+    (cl-loop for backlink in backlinks
+             collect (pcase-let ((`(,source-id ,dest-id ,pos ,properties) backlink))
+                       (org-roam-populate
+                        (org-roam-backlink-create
+                         :source-node (org-roam-node-create :id source-id)
+                         :target-node (org-roam-node-create :id dest-id)
+                         :point pos
+                         :properties properties))))))
+
+(defun org-roam-backlinks-sort (a b)
+  "Default sorting function for backlinks A and B.
+Sorts by title."
+  (string< (org-roam-node-title (org-roam-backlink-source-node a))
+           (org-roam-node-title (org-roam-backlink-source-node b))))
 
 ;;; Section inserter
 (cl-defun org-roam-backlinks-insert-section (&key node _file)
   "Insert backlinks section for NODE."
-  (let* ((backlinks (seq-group-by #'car (org-roam-backlinks-get node)))
-         values)
+  (let* ((backlinks (seq-sort #'org-roam-backlinks-sort (org-roam-backlinks-get node))))
     (magit-insert-section (org-roam-backlinks)
       (magit-insert-heading "Backlinks:")
       (dolist (backlink backlinks)
-        (setq values (cdr backlink))
-        (pcase-dolist (`(,source ,source-file ,pos ,source-title ,dest ,dest-title ,props) values)
-          (org-roam-node-insert-section :source source
-                                        :source-file source-file
-                                        :pos pos
-                                        :source-title source-title
-                                        :dest dest
-                                        :dest-title dest-title
-                                        :props props)))
+        (org-roam-node-insert-section
+         :source-node (org-roam-backlink-source-node backlink)
+         :point (org-roam-backlink-point backlink)
+         :properties (org-roam-backlink-properties backlink)))
       (insert ?\n))))
 
 (provide 'org-roam-backlinks)
