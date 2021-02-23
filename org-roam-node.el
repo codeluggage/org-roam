@@ -119,7 +119,7 @@ If ASSERT, throw an error."
                                      (not (bobp)))
                            (org-up-heading-or-point-min))
                          (org-roam-populate (org-roam-node-create :id id))))))))
-        node
+      node
     (when assert
       (user-error "No node at point"))))
 
@@ -150,18 +150,19 @@ The car is the displayed title or alias for the node, and the cdr
 is a plist containing the properties of the node."
   (let ((tags-table (org-roam--tags-table)))
     (cl-loop for row in (append
-                         (org-roam-db-query [:select [file pos title id]
+                         (org-roam-db-query [:select [file pos title title id]
                                              :from nodes])
-                         (org-roam-db-query [:select [nodes:file pos alias node-id]
+                         (org-roam-db-query [:select [nodes:file pos alias title node-id]
                                              :from aliases
                                              :left-join nodes
                                              :on (= aliases:node-id nodes:id)]))
-             collect (pcase-let* ((`(,file ,pos ,title ,id) row)
+             collect (pcase-let* ((`(,file ,pos ,alias ,title ,id) row)
                                   (node (org-roam-node-create :id id
                                                               :file file
+                                                              :title title
                                                               :point pos
                                                               :tags (gethash id tags-table))))
-                       (cons (propertize title 'node node) node)))))
+                       (cons (propertize alias 'node node) node)))))
 
 (defun org-roam-node-read (&optional initial-input filter-fn)
   "Read and return an `org-roam-node'.
@@ -220,12 +221,12 @@ PROPERTIES contains properties about the link."
     (magit-insert-heading)
     (oset section node source-node)
     (magit-insert-section section (org-roam-preview-section)
-          (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview (org-roam-node-file source-node)
-                                                                point)))
-            (insert (org-fontify-like-in-org-mode s) "\n")
-            (oset section file (org-roam-node-file source-node))
-            (oset section begin begin)
-            (oset section end end)))))
+      (pcase-let ((`(,begin ,end ,s) (org-roam-node-preview (org-roam-node-file source-node)
+                                                            point)))
+        (insert (org-fontify-like-in-org-mode s) "\n")
+        (oset section file (org-roam-node-file source-node))
+        (oset section begin begin)
+        (oset section end end)))))
 
 ;;;Interactives
 ;;;###autoload

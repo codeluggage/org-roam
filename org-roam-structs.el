@@ -43,7 +43,7 @@
 (cl-defstruct (org-roam-backlink (:constructor org-roam-backlink-create)
                                  (:copier nil))
   source-node target-node
-  file pos title properties)
+  point properties)
 
 (provide 'org-roam-structs)
 ;;; org-roam-structs.el ends here
