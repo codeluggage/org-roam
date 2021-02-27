@@ -31,7 +31,8 @@
 ;;; Code:
 ;;;; Library Requires
 (require 'org-capture)
-(require 'org-roam-macs)
+(eval-when-compile
+  (require 'org-roam-macs))
 (require 'org-roam-db)
 (require 'org-roam-structs)
 (require 'dash)

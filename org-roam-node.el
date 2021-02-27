@@ -150,7 +150,7 @@ instead."
 (defun org-roam-node--completions ()
   "Return an alist for node completion.
 The car is the displayed title or alias for the node, and the cdr
-is a plist containing the properties of the node."
+is the `org-roam-node'."
   (let ((tags-table (org-roam--tags-table)))
     (cl-loop for row in (append
                          (org-roam-db-query [:select [file pos title title id]

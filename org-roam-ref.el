@@ -33,26 +33,9 @@
 ;;
 ;;; Code:
 ;;;; Library Requires
-(defun org-roam-ref--completions (&optional arg filter)
-  "Return an alist of refs to absolute path of Org-roam files.
-
-When called interactively (i.e. when ARG is 1), formats the car
-of the completion-candidates with extra information: title, tags,
-and type \(when `org-roam-include-type-in-ref-path-completions'
-is non-nil).
-
-When called with a `C-u' prefix (i.e. when ARG is 4), forces the
-default format without the formatting.
-
-FILTER can either be a string or a function:
-
-- If it is a string, it should be the type of refs to include as
-  candidates \(e.g. \"cite\", \"website\", etc.)
-
-- If it is a function, it should be the name of a function that
-  takes three arguments: the type, the ref, and the file of the
-  current candidate. It should return t if that candidate is to
-  be included as a candidate."
+(defun org-roam-ref--completions ()
+  "Return an alist for ref completion.
+The car is the ref, and the cdr is the corresponding node for the ref."
   nil
   (let ((rows (org-roam-db-query
                [:select [id ref type nodes:file pos title]

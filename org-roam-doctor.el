@@ -47,7 +47,8 @@
 (require 'org-element)
 (require 's)
 (require 'dash)
-(require 'org-roam-macs)
+(eval-when-compile
+  (require 'org-roam-macs))
 (require 'org-roam-node)
 
 (defvar org-roam-mode-map)

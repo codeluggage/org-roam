@@ -36,7 +36,6 @@
 ;;; Library Requires
 (require 'org-capture)
 (require 'org-roam-capture)
-(require 'org-roam-macs)
 (require 'f)
 
 ;;;; Declarations

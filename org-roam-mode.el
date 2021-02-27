@@ -36,6 +36,8 @@
 
 (defvar org-roam-directory)
 
+(declare-function org-roam--org-file-p "org-roam")
+
 ;;; Faces
 (defface org-roam-header-line
   `((((class color) (background light))

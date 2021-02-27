@@ -36,7 +36,8 @@
 
 (require 'ol)
 (require 'org-roam-compat)
-(require 'org-roam-macs)
+(eval-when-compile
+  (require 'org-roam-macs))
 (require 'org-roam-db)
 
 (require 'org-element)
