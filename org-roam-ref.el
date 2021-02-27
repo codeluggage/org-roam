@@ -55,17 +55,17 @@ FILTER can either be a string or a function:
   be included as a candidate."
   nil
   (let ((rows (org-roam-db-query
-               [:select [id ref nodes:file pos title]
+               [:select [id ref type nodes:file pos title]
                 :from refs
                 :left-join nodes
                 :on (= refs:node-id nodes:id)])))
     (cl-loop for row in rows
-             collect (pcase-let* ((`(,id ,ref ,file ,pos ,title) row)
+             collect (pcase-let* ((`(,id ,ref ,type ,file ,pos ,title) row)
                                   (node (org-roam-node-create :id id
                                                               :file file
                                                               :point pos
                                                               :title title)))
-                       (cons (propertize ref 'node node)
+                       (cons (propertize ref 'node node 'type type)
                              node)))))
 
 (defun org-roam-ref-read (&optional initial-input filter-fn)

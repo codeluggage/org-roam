@@ -33,9 +33,12 @@
 ;;;; Library Requires
 (require 'magit-section)
 (require 'org-roam-structs)
+(require 'org-roam-mode)
+(eval-when-compile
+  (require 'org-roam-macs))
 
 (defvar org-roam-mode-sections)
-(defvar org-roam-mode-map)
+
 ;;; Section
 ;;;; Definition
 (defvar org-roam-node-map

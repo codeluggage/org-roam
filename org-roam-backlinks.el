@@ -32,6 +32,7 @@
 ;;; Code:
 ;;;; Library Requires
 (require 'magit-section)
+(require 'org-roam-structs)
 
 (defvar org-roam-mode-sections)
 (defvar org-roam-mode-map)

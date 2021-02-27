@@ -45,5 +45,10 @@
   source-node target-node
   point properties)
 
+(cl-defstruct (org-roam-reflink (:constructor org-roam-reflink-create)
+                                (:copier nil))
+  source-node ref
+  point properties)
+
 (provide 'org-roam-structs)
 ;;; org-roam-structs.el ends here

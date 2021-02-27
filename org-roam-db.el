@@ -156,7 +156,8 @@ SQL can be either the emacsql vector representation, or a string."
     (refs
      ([(file :not-null)
        (node-id :not-null)
-       ref]
+       (ref :not-null)
+       (type :not-null)]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
     (tags
@@ -302,12 +303,18 @@ If UPDATE-P is non-nil, first remove the file in the database."
                    (vector file id alias))
                  (split-string-and-unquote aliases))))
       (when refs
-        (org-roam-db-query
-         [:insert :into refs
-          :values $v1]
-         (mapcar (lambda (ref)
-                   (vector file id ref))
-                 (split-string-and-unquote refs)))))))
+        (setq refs (split-string-and-unquote refs))
+        (let (rows)
+          (dolist (ref refs)
+            (if (string-match org-link-plain-re ref)
+                (progn
+                  (push (vector file id (match-string 2 ref) (match-string 1 ref)) rows))
+              (lwarn '(org-roam) :warning
+                     "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref)))
+          (org-roam-db-query
+           [:insert :into refs
+            :values $v1]
+           rows))))))
 
 (defun org-roam-db-insert-node-data ()
   "Insert node data for headline at point into the Org-roam cache."
@@ -350,14 +357,21 @@ If UPDATE-P is non-nil, first remove the file in the database."
 
 (defun org-roam-db-insert-refs ()
   "Insert refs for node at point into Org-roam cache."
-  (when-let ((file (buffer-file-name (buffer-base-buffer)))
-             (node-id (org-id-get))
-             (refs (org-entry-get (point) "ROAM_REFS")))
-    (org-roam-db-query [:insert :into refs
-                        :values $v1]
-                       (mapcar (lambda (ref)
-                                 (vector file node-id ref))
-                               (split-string-and-unquote refs)))))
+  (when-let* ((file (buffer-file-name (buffer-base-buffer)))
+              (node-id (org-id-get))
+              (refs (org-entry-get (point) "ROAM_REFS"))
+              (refs (split-string-and-unquote refs)))
+    (let (rows)
+      (dolist (ref refs)
+        (save-match-data
+          (if (string-match org-link-plain-re ref)
+              (progn
+                (push (vector file node-id (match-string 2 ref) (match-string 1 ref))  rows))
+            (lwarn '(org-roam) :warning
+                   "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref))))
+      (org-roam-db-query [:insert :into refs
+                          :values $v1]
+                         rows))))
 
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."

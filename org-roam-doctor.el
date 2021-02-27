@@ -50,6 +50,8 @@
 (require 'org-roam-macs)
 (require 'org-roam-node)
 
+(defvar org-roam-mode-map)
+
 (declare-function org-roam--get-roam-buffers "org-roam")
 (declare-function org-roam--list-all-files "org-roam")
 (declare-function org-roam--org-roam-file-p "org-roam")

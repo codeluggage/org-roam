@@ -32,6 +32,8 @@
 ;;; Code:
 (require 'magit-section)
 
+(require 'org-roam-utils)
+
 (defvar org-roam-directory)
 
 ;;; Faces

@@ -33,6 +33,7 @@
 (require 'org-capture)
 (require 'org-roam-macs)
 (require 'org-roam-db)
+(require 'org-roam-structs)
 (require 'dash)
 (require 's)
 (require 'cl-lib)
