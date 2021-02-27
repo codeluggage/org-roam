@@ -64,7 +64,6 @@
 (require 'org-roam-ref)
 (require 'org-roam-db)
 (require 'org-roam-doctor)
-(require 'org-roam-graph)
 (require 'org-roam-link)
 
 ;;;; Declarations
