@@ -382,8 +382,9 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (dest (org-element-property :path link))
           (properties (list :outline (org-get-outline-path)))
           source)
-      (while (not (setq source (org-id-get)))
-        (org-up-heading-or-point-min))
+      (save-excursion
+        (while (not (setq source (org-id-get)))
+          (org-up-heading-or-point-min)))
       (org-roam-db-query
        [:insert :into links
         :values $v1]
