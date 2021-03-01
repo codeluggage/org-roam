@@ -243,7 +243,7 @@ If OTHER-WINDOW, visit the NODE in another window."
   (let ((node (org-roam-node-read initial-input filter-fn)))
     (if (org-roam-node-file node)
         (org-roam-node-visit node other-window)
-      (let ((org-roam-capture--info `((title . (org-roam-node-title node))
+      (let ((org-roam-capture--info `((title . ,(org-roam-node-title node))
                                       (slug  . ,(funcall org-roam-title-to-slug-function (org-roam-node-title node)))))
             (org-roam-capture--context 'title))
         (setq org-roam-capture-additional-template-props (list :finalize 'find-file))
