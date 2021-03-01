@@ -384,12 +384,14 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (properties (list :outline (org-get-outline-path)))
           source)
       (save-excursion
-        (while (not (setq source (org-id-get)))
+        (while (and (not (setq source (org-id-get)))
+                    (not (= (point) (point-min))))
           (org-up-heading-or-point-min)))
-      (org-roam-db-query
-       [:insert :into links
-        :values $v1]
-       (vector file (point) source dest type properties)))))
+      (when source
+        (org-roam-db-query
+         [:insert :into links
+          :values $v1]
+         (vector file (point) source dest type properties))))))
 
 ;;;;; Fetching
 (defun org-roam-db--get-current-files ()
