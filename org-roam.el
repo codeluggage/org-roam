@@ -457,7 +457,7 @@ M-x info for more information at Org-roam > Installation > Post-Installation Tas
   (advice-add 'rename-file :after #'org-roam--rename-file-advice)
   (advice-add 'delete-file :before #'org-roam--delete-file-advice)
   (advice-add 'org-id-new :after #'org-roam--id-new-advice)
-  (org-roam-db-build-cache))
+  (org-roam-db-sync))
 
 (defun org-roam-teardown ()
   "Teardown Org-roam."

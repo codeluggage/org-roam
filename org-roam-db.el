@@ -64,7 +64,7 @@ when used with multiple Org-roam instances."
 
 (defcustom org-roam-db-gc-threshold gc-cons-threshold
   "The value to temporarily set the `gc-cons-threshold' threshold to.
-During large, heavy operations like `org-roam-db-build-cache',
+During large, heavy operations like `org-roam-db-sync',
 many GC operations happen because of the large number of
 temporary structures generated (e.g. parsed ASTs). Temporarily
 increasing `gc-cons-threshold' will help reduce the number of GC
@@ -191,7 +191,7 @@ SQL can be either the emacsql vector representation, or a string."
         (progn
           (org-roam-message (format "Upgrading the Org-roam database from version %d to version %d"
                                     version org-roam-db--version))
-          (org-roam-db-build-cache t))))
+          (org-roam-db-sync t))))
   version)
 
 (defun org-roam-db--close (&optional db)
@@ -270,52 +270,52 @@ If UPDATE-P is non-nil, first remove the file in the database."
 (defun org-roam-db-insert-file-node ()
   "Insert the file-level node into the Org-roam cache."
   (org-with-point-at 1
-    (let ((file (buffer-file-name (buffer-base-buffer)))
-          (title (cadr (assoc "TITLE" (org-collect-keywords '("title"))
-                              #'string-equal)))
-          (id (org-id-get-create))
-          (pos (point))
-          (todo nil)
-          (priority nil)
-          (scheduled nil)
-          (deadline nil)
-          (level 0)
-          (aliases (org-entry-get (point) "ROAM_ALIASES"))
-          (tags (org-entry-get (point) "ROAM_TAGS"))
-          (refs (org-entry-get (point) "ROAM_REFS")))
-      (org-roam-db-query
-       [:insert :into nodes
-        :values $v1]
-       (vector id file level pos todo priority
-               scheduled deadline title))
-      (when tags
+    (when-let ((id (org-id-get)))
+      (let ((file (buffer-file-name (buffer-base-buffer)))
+            (title (cadr (assoc "TITLE" (org-collect-keywords '("title"))
+                                #'string-equal)))
+            (pos (point))
+            (todo nil)
+            (priority nil)
+            (scheduled nil)
+            (deadline nil)
+            (level 0)
+            (aliases (org-entry-get (point) "ROAM_ALIASES"))
+            (tags org-file-tags)
+            (refs (org-entry-get (point) "ROAM_REFS")))
         (org-roam-db-query
-         [:insert :into tags
+         [:insert :into nodes
           :values $v1]
-         (mapcar (lambda (tag)
-                   (vector file id tag))
-                 (split-string-and-unquote tags))))
-      (when aliases
-        (org-roam-db-query
-         [:insert :into aliases
-          :values $v1]
-         (mapcar (lambda (alias)
-                   (vector file id alias))
-                 (split-string-and-unquote aliases))))
-      (when refs
-        (setq refs (split-string-and-unquote refs))
-        (let (rows)
-          (dolist (ref refs)
-            (if (string-match org-link-plain-re ref)
-                (progn
-                  (push (vector file id (match-string 2 ref) (match-string 1 ref)) rows))
-              (lwarn '(org-roam) :warning
-                     "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref)))
-          (when rows
-            (org-roam-db-query
-             [:insert :into refs
-              :values $v1]
-             rows)))))))
+         (vector id file level pos todo priority
+                 scheduled deadline title))
+        (when tags
+          (org-roam-db-query
+           [:insert :into tags
+            :values $v1]
+           (mapcar (lambda (tag)
+                     (vector file id (substring-no-properties tag)))
+                   tags)))
+        (when aliases
+          (org-roam-db-query
+           [:insert :into aliases
+            :values $v1]
+           (mapcar (lambda (alias)
+                     (vector file id alias))
+                   (split-string-and-unquote aliases))))
+        (when refs
+          (setq refs (split-string-and-unquote refs))
+          (let (rows)
+            (dolist (ref refs)
+              (if (string-match org-link-plain-re ref)
+                  (progn
+                    (push (vector file id (match-string 2 ref) (match-string 1 ref)) rows))
+                (lwarn '(org-roam) :warning
+                       "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref)))
+            (when rows
+              (org-roam-db-query
+               [:insert :into refs
+                :values $v1]
+               rows))))))))
 
 (defun org-roam-db-insert-node-data ()
   "Insert node data for headline at point into the Org-roam cache."
@@ -474,7 +474,7 @@ connections, nil is returned."
      (secure-hash 'sha1 (current-buffer)))))
 
 ;;;;; Updating
-(defun org-roam-db-build-cache (&optional force)
+(defun org-roam-db-sync (&optional force)
   "Build the cache for `org-roam-directory'.
 If FORCE, force a rebuild of the cache from scratch."
   (interactive "P")

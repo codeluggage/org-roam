@@ -125,6 +125,10 @@ Node Properties
 * Aliases::
 * Refs::
 
+Building Extensions
+
+* Public Interface::
+
 The Templating System
 
 * Template Walkthrough::
@@ -729,6 +733,70 @@ key and a URL at the same time.
 
 @node Building Extensions
 @chapter @strong{TODO} Building Extensions
+
+@menu
+* Public Interface::
+@end menu
+
+@node Public Interface
+@section @strong{TODO} Public Interface
+
+Database (for developers)
+@itemize
+@item
+querying: (org-roam-db-query)
+
+@item
+updating database: (org-roam-db-sync)
+@end itemize
+
+Nodes:
+@itemize
+@item
+List all nodes
+
+@item
+Read a node in from completion
+
+@item
+Get node at point
+@end itemize
+
+Links:
+@itemize
+@item
+Get backlinks for node
+@end itemize
+
+Tags:
+@itemize
+@item
+Add tag to node
+
+@item
+delete tag for node
+
+@item
+Get tags for node
+@end itemize
+
+Aliases:
+@itemize
+@item
+Add alias to node
+
+@item
+Delete alias for node
+
+@item
+Get aliases for node
+@end itemize
+
+Ref:
+@itemize
+@item
+Add ref to node
+@end itemize
 
 @node The Org-mode Ecosystem
 @chapter @strong{TODO} The Org-mode Ecosystem

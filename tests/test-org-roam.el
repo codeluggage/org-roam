@@ -71,7 +71,7 @@
     (org-link-set-parameters "cite")))
 
 ;;; Tests
-(xdescribe "org-roam-db-build-cache"
+(xdescribe "org-roam-db-sync"
   (before-each
     (test-org-roam--init))
 
@@ -87,7 +87,7 @@
             (list (list "https://google.com/" (test-org-roam--abs-path "web_ref.org") "website")))
 
     ;; Expect rebuilds to be really quick (nothing changed)
-    (expect (org-roam-db-build-cache)
+    (expect (org-roam-db-sync)
             :to-equal
             (list :files 0 :links 0 :tags 0 :titles 0 :refs 0 :deleted 0))))
 

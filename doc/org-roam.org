@@ -450,6 +450,36 @@ key and a URL at the same time.
 * TODO Org-roam protocol
 * TODO Diagnosing and Repair
 * TODO Building Extensions
+** TODO Public Interface
+
+Database (for developers)
+- querying: (org-roam-db-query)
+- updating full database: (org-roam-db-sync)
+- update current file: (org-roam-db-update-file)
+- remove file from database: (org-roam-db-clear-file)
+
+Nodes:
+- List all nodes
+- Read a node in from completion
+- Get node at point
+
+Links:
+- Get backlinks for node
+
+Tags:
+- Add tag to node
+- delete tag for node
+- Get tags for node
+
+Aliases:
+- Add alias to node
+- Delete alias for node
+- Get aliases for node
+
+Ref:
+- Add ref to node
+  
+
 * TODO The Org-mode Ecosystem
 * TODO Frequently Asked Questions
 * The Templating System
